@@ -1,8 +1,8 @@
 package xyz.qwexter
 
 import app.cash.sqldelight.driver.native.NativeSqliteDriver
-import io.ktor.server.application.*
-import io.ktor.util.*
+import io.ktor.server.application.Application
+import io.ktor.util.AttributeKey
 import xyz.qwexter.db.TatDatabase
 
 private val DatabaseKey = AttributeKey<TatDatabase>("TatDatabase")

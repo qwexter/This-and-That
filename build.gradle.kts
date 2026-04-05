@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.sqldelight)
+    alias(libs.plugins.detekt)
 }
 
 group = "xyz.qwexter"
@@ -42,6 +43,20 @@ kotlin {
             implementation(libs.sqldelight.native.driver)
         }
     }
+}
+
+detekt {
+    config.setFrom(files("config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    source.setFrom(
+        "src/commonMain/kotlin",
+        "src/commonTest/kotlin",
+    )
+}
+
+dependencies {
+    detektPlugins(libs.detekt.formatting)
+    detektPlugins(libs.detekt.rules.coroutines)
 }
 
 sqldelight {
