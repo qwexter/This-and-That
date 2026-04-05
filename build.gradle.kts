@@ -31,6 +31,12 @@ kotlin {
     }
 
     sourceSets {
+        nativeTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.ktor.server.test.host)
+            implementation(libs.ktor.client.content.negotiation)
+        }
+
         commonMain.dependencies {
             implementation(libs.ktor.server.cio)
             implementation(libs.ktor.server.content.negotiation)
