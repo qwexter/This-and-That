@@ -61,11 +61,10 @@ Kotlin/Native's own clang — no MSYS2 or external toolchain required at build t
 
 GitHub Actions runs on every push and pull request to `main`:
 
-| Job       | Runner           | What it does                        |
-|-----------|------------------|-------------------------------------|
-| `lint`    | `ubuntu-latest`  | Runs `detekt` (style + coroutines)  |
-| `test`    | `ubuntu-latest`  | Runs `linuxX64Test`                 |
-| `test`    | `windows-latest` | Runs `mingwX64Test`                 |
+| Job    | Runner          | What it does                       |
+|--------|-----------------|------------------------------------|
+| `lint` | `ubuntu-latest` | Runs `detekt` (style + coroutines) |
+| `test` | `ubuntu-latest` | Runs `nativeTest` (linuxX64)       |
 
 Tests run only after lint passes. The Kotlin/Native toolchain (`~/.konan`) is cached between runs.
 

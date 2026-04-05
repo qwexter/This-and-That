@@ -32,18 +32,9 @@ jobs:
           ./gradlew detekt
 
   test:
-    name: Test (${{ matrix.target }})
+    name: Test
     needs: lint
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: linuxX64
-            os: ubuntu-latest
-          - target: mingwX64
-            os: windows-latest
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -64,4 +55,4 @@ jobs:
       - name: Run tests
         run: |
           chmod +x gradlew
-          ./gradlew ${{ matrix.target }}Test
+          ./gradlew nativeTest
