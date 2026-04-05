@@ -27,7 +27,9 @@ jobs:
           restore-keys: gradle-${{ runner.os }}-
 
       - name: Run detekt
-        run: ./gradlew detekt
+        run: |
+          chmod +x gradlew
+          ./gradlew detekt
 
   test:
     name: Test (${{ matrix.target }})
@@ -60,4 +62,6 @@ jobs:
           restore-keys: gradle-konan-${{ runner.os }}-
 
       - name: Run tests
-        run: ./gradlew ${{ matrix.target }}Test
+        run: |
+          chmod +x gradlew
+          ./gradlew ${{ matrix.target }}Test
