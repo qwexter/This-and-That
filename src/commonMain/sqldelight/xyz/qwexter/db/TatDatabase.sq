@@ -26,3 +26,79 @@ SELECT * FROM todo_items;
 
 insertTodo:
 INSERT INTO todo_items(title, created_at) VALUES (?, ?);
+
+-- Enum constraints (stored as TEXT)
+CREATE TABLE IF NOT EXISTS task (
+    id TEXT NOT NULL PRIMARY KEY,
+
+    name TEXT NOT NULL,
+    description TEXT,
+
+    priority TEXT NOT NULL
+        CHECK (priority IN ('Low', 'Medium', 'High', 'Vital')),
+
+    status TEXT NOT NULL DEFAULT 'todo'
+        CHECK (status IN ('todo', 'in_progress', 'done', 'blocked')),
+
+    deadline INTEGER, -- Unix timestamp (nullable)
+
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER -- soft delete
+);
+
+-- Indexes for performance
+CREATE INDEX task_status_idx ON task(status);
+CREATE INDEX task_deleted_idx ON task(deleted_at);
+
+insertTask:
+INSERT INTO task(
+    id,
+    name,
+    description,
+    priority,
+    status,
+    deadline,
+    created_at,
+    updated_at,
+    deleted_at
+)
+VALUES (?, ?, ?, ?, COALESCE(?, 'todo'), ?, ?, ?, NULL);
+
+updateTask:
+UPDATE task
+SET
+    name = ?,
+    description = ?,
+    priority = ?,
+    status = ?,
+    deadline = ?,
+    updated_at = ?
+WHERE id = ? AND deleted_at IS NULL;
+
+updateTaskStatus:
+UPDATE task
+SET
+    status = ?,
+    updated_at = ?
+WHERE id = ? AND deleted_at IS NULL;
+
+softDeleteTask:
+UPDATE task
+SET
+    deleted_at = ?,
+    updated_at = ?
+WHERE id = ? AND deleted_at IS NULL;
+
+restoreTask:
+UPDATE task
+SET
+    deleted_at = NULL,
+    updated_at = ?
+WHERE id = ?;
+
+selectTaskById:
+SELECT *
+FROM task
+WHERE id = ?
+LIMIT 1;
