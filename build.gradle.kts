@@ -24,8 +24,12 @@ kotlin {
     nativeTarget.binaries {
         executable {
             entryPoint = "xyz.qwexter.main"
-            if (hostOs.startsWith("Windows")) {
-                linkerOpts("-L${rootProject.projectDir}/libs/windows", "-lsqlite3")
+        }
+        all {
+            when {
+                hostOs == "Linux" -> linkerOpts("-L/usr/lib", "-lsqlite3", "--allow-shlib-undefined")
+                hostOs.startsWith("Mac") -> linkerOpts("-lsqlite3")
+                hostOs.startsWith("Windows") -> linkerOpts("-L${rootProject.projectDir}/libs/windows", "-lsqlite3")
             }
         }
     }
@@ -66,9 +70,11 @@ dependencies {
 }
 
 sqldelight {
+
     databases {
-        create("TatDatabase") {
+        register("TatDatabase") {
             packageName.set("xyz.qwexter.db")
         }
+        linkSqlite = false
     }
 }
