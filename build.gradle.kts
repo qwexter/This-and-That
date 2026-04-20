@@ -52,6 +52,9 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.sqldelight.native.driver)
         }
+        all {
+            languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi")
+        }
     }
 }
 
