@@ -20,7 +20,7 @@ interface TasksRepository {
         private val allTasks = mutableListOf<Task>()
 
         override suspend fun allActiveTasks(): List<Task> {
-            TODO("Not yet implemented")
+            return allTasks.filter { it.deletedAt == null }.toList()
         }
 
         override suspend fun createTask(
