@@ -14,4 +14,23 @@ interface TasksRepository {
         priority: TaskPriority = TaskPriority.Low,
         deadline: LocalDateTime?,
     )
+
+    companion object Mock : TasksRepository {
+
+        private val allTasks = mutableListOf<Task>()
+
+        override suspend fun allActiveTasks(): List<Task> {
+            TODO("Not yet implemented")
+        }
+
+        override suspend fun createTask(
+            name: String,
+            description: String?,
+            status: TaskStatus,
+            priority: TaskPriority,
+            deadline: LocalDateTime?,
+        ) {
+            TODO("Not yet implemented")
+        }
+    }
 }
