@@ -1,12 +1,10 @@
 package xyz.qwexter.tat.integration
 
 import io.ktor.client.call.body
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.datetime.LocalDateTime
 import xyz.qwexter.tat.models.Task
 import xyz.qwexter.tat.models.TaskId
@@ -14,6 +12,8 @@ import xyz.qwexter.tat.models.TaskName
 import xyz.qwexter.tat.models.TaskPriority
 import xyz.qwexter.tat.models.TaskStatus
 import xyz.qwexter.tat.repository.TasksRepository
+import xyz.qwexter.tat.routing.ActiveTask
+import xyz.qwexter.tat.routing.toApi
 import xyz.qwexter.tat.utils.todoApp
 import xyz.qwexter.tat.utils.unimplementedTasksRepository
 import kotlin.test.Test
@@ -95,37 +95,40 @@ class TasksRoutingTest {
     )
 
     @Test
-    fun `GET tasks return 200 when empty`() = todoApp {
-        val client = createClient { install(ContentNegotiation) { json() } }
-        val response = client.get("tasks")
-        val actual = response.body<List<Task>>()
-        assertTrue(actual.isEmpty())
-        assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals(ContentType.Application.Json, response.contentType())
-    }
+    fun `GET tasks returns empty list when repository is empty`() =
+        todoApp(tasksRepository = TasksRepository.buildInMemory(emptyList())) {
+            val response = client.get("tasks")
+            val actual = response.body<List<ActiveTask>>()
+            assertTrue(actual.isEmpty())
+
+            assertEquals(expected = HttpStatusCode.OK, actual = response.status)
+            assertEquals(expected = ContentType.Application.Json, actual = response.contentType())
+        }
 
     @Test
-    fun `GET tasks return 200 and items when non-empty`() = todoApp(
+    fun `GET tasks returns only active tasks`() = todoApp(
         tasksRepository = TasksRepository.buildInMemory(testTasks),
     ) {
-        val client = createClient { install(ContentNegotiation) { json() } }
         val response = client.get("tasks")
-        assertEquals(HttpStatusCode.OK, response.status)
-        val actual = response.body<List<Task>>()
+        val actual = response.body<List<ActiveTask>>()
         assertEquals(
-            testTasks.filter { it.deletedAt == null },
-            actual,
+            expected = testTasks.filter { it.deletedAt == null }.map { it.toApi() },
+            actual = actual,
         )
+        assertTrue { actual.none { it.id == "task-5" } } // soft-deleted task
+
+        assertEquals(HttpStatusCode.OK, response.status)
         assertEquals(ContentType.Application.Json, response.contentType())
     }
 
     @Test
-    fun `GET tasks return 500 when error happened`() = todoApp(
+    fun `GET tasks returns 500 when repository fails`() = todoApp(
         tasksRepository = unimplementedTasksRepository,
     ) {
-        val client = createClient { install(ContentNegotiation) { json() } }
-        val response = client.get("tasks")
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        assertEquals(
+            expected = HttpStatusCode.InternalServerError,
+            actual = client.get("tasks").status,
+        )
     }
 
 }

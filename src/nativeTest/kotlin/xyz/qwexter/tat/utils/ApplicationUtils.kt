@@ -1,5 +1,7 @@
 package xyz.qwexter.tat.utils
 
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.test.TestResult
@@ -20,5 +22,8 @@ internal fun todoApp(
             configureDatabases()
             configureRouting(tasksRepository)
         }
+        client = jsonClient()
         block()
     }
+
+internal fun ApplicationTestBuilder.jsonClient() = createClient { install(ContentNegotiation) { json() } }

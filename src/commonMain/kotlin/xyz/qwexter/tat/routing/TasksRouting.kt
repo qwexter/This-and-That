@@ -12,8 +12,8 @@ fun Application.tasksRouting(tasksRepository: TasksRepository) {
     routing {
         route("/tasks") {
             get {
-                val tasks = tasksRepository.allActiveTasks()
-                call.respond(status = HttpStatusCode.OK, message = tasks)
+                val activeTasks = tasksRepository.allActiveTasks().map { it.toApi() }
+                call.respond(status = HttpStatusCode.OK, message = activeTasks)
             }
         }
     }
