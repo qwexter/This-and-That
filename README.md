@@ -78,10 +78,11 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 
 ### Tasks
 
-| Method | Path    | Body | Description           |
-|--------|---------|------|-----------------------|
-| GET    | /tasks  | —    | List all active tasks |
-| POST   | /tasks  | JSON | Create a new task     |
+| Method | Path           | Body | Description           |
+|--------|----------------|------|-----------------------|
+| GET    | /tasks         | —    | List all active tasks |
+| GET    | /tasks/{id}    | —    | Get task by ID        |
+| POST   | /tasks         | JSON | Create a new task     |
 
 **POST body (`AddTask`):**
 ```json
@@ -105,6 +106,7 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 | Status | When                                        |
 |--------|---------------------------------------------|
 | 400    | Malformed JSON, missing required fields, blank name |
+| 404    | Task not found                              |
 | 500    | Unexpected server error                     |
 
 **Examples:**
@@ -121,6 +123,9 @@ curl -X POST http://localhost:8080/tasks \
 
 # List all active tasks
 curl http://localhost:8080/tasks
+
+# Get task by ID
+curl http://localhost:8080/tasks/some-task-id
 ```
 
 ## Database
