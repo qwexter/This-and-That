@@ -3,6 +3,7 @@ package xyz.qwexter.tat.integration
 import io.ktor.client.call.body
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.request.delete
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -448,6 +449,53 @@ class TasksRoutingTest {
             contentType(ContentType.Application.Json)
             setBody(UpdateTask(status = ApiTaskStatus.Done))
         }
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+    }
+
+    @Test
+    fun `DELETE task returns 204 and task no longer in GET list`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val task = testTasks.first { it.deletedAt == null }
+        val deleteResponse = client.delete("tasks/${task.id.id}")
+        assertEquals(HttpStatusCode.NoContent, deleteResponse.status)
+
+        val tasks = client.get("tasks").body<List<ActiveTask>>()
+        assertTrue(tasks.none { it.id == task.id.id })
+    }
+
+    @Test
+    fun `DELETE task returns 404 for unknown id`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val response = client.delete("tasks/unknown-id")
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `DELETE task returns 404 for already deleted task`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val alreadyDeleted = testTasks.first { it.deletedAt != null }
+        val response = client.delete("tasks/${alreadyDeleted.id.id}")
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `DELETE task returns 404 for GET after deletion`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val task = testTasks.first { it.deletedAt == null }
+        client.delete("tasks/${task.id.id}")
+        val getResponse = client.get("tasks/${task.id.id}")
+        assertEquals(HttpStatusCode.NotFound, getResponse.status)
+    }
+
+    @Test
+    fun `DELETE task returns 500 when repository fails`() = todoApp(
+        taskRepositoryFactory = unimplementedTasksRepository,
+    ) {
+        val response = client.delete("tasks/task-1")
         assertEquals(HttpStatusCode.InternalServerError, response.status)
     }
 

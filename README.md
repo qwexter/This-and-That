@@ -84,6 +84,7 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 | GET    | /tasks/{id}  | —    | Get task by ID        |
 | POST   | /tasks       | JSON | Create a new task     |
 | PATCH  | /tasks/{id}  | JSON | Partial update a task |
+| DELETE | /tasks/{id}  | —    | Soft-delete a task    |
 
 **Error responses:**
 
