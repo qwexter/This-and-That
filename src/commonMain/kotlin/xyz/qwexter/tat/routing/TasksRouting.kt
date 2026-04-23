@@ -9,6 +9,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import xyz.qwexter.tat.models.TaskId
 import xyz.qwexter.tat.models.TaskPriority
 import xyz.qwexter.tat.models.TaskStatus
 import xyz.qwexter.tat.repository.TasksRepository
@@ -18,6 +19,16 @@ fun Application.tasksRouting(tasksRepository: TasksRepository) {
         route("/tasks") {
             get {
                 call.respond(HttpStatusCode.OK, tasksRepository.allActiveTasks().map { it.toApi() })
+            }
+            get("/{taskId}") {
+                val taskId = TaskId(call.parameters["taskId"]!!)
+                val task = tasksRepository.getTaskById(taskId)
+                if (task == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@get
+                }
+
+                call.respond(task.toApi())
             }
             post {
                 val addTask = call.receive<AddTask>()

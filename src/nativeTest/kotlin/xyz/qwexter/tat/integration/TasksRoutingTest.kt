@@ -238,12 +238,62 @@ class TasksRoutingTest {
         val response = client.post("tasks") {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
-            setBody(AddTask(name = "Test", description = null, status = ApiTaskStatus.Done, priority = ApiTaskPriority.High, deadline = null))
+            setBody(
+                AddTask(
+                    name = "Test",
+                    description = null,
+                    status = ApiTaskStatus.Done,
+                    priority = ApiTaskPriority.High,
+                    deadline = null,
+                ),
+            )
         }
         assertEquals(HttpStatusCode.Created, response.status)
         val task = response.body<ActiveTask>()
         assertEquals(ApiTaskStatus.Done, task.status)
         assertEquals(ApiTaskPriority.High, task.priority)
+    }
+
+    @Test
+    fun `GET task by id return stored task`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val requestedTask = testTasks.first()
+        val id = requestedTask.id.id
+        val response = client.get("tasks/$id")
+
+        val task = response.body<ActiveTask>()
+        assertEquals(requestedTask.id.id, task.id)
+        assertEquals(requestedTask.name.name, task.name)
+        assertEquals(requestedTask.description, task.description)
+        assertEquals(requestedTask.deadline, task.deadline)
+        assertEquals(requestedTask.status.name, task.status.name)
+        assertEquals(requestedTask.priority.name, task.priority.name)
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `GET task by unknown id return Not Found error`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val response = client.get("tasks/some_unkown_task_id")
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `GET task by blank id return Not Found error`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val response = client.get("tasks/ ")
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `GET task by id return 500 when repository fails`() = todoApp(
+        taskRepositoryFactory = unimplementedTasksRepository,
+    ) {
+        val response = client.get("tasks/ ")
+        assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
 }
