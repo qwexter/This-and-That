@@ -6,15 +6,17 @@ import io.ktor.server.engine.embeddedServer
 import xyz.qwexter.tat.repository.TasksRepository
 
 fun main() {
-    embeddedServer(CIO, port = 8080, host = "0.0.0.0", module = Application::module)
-        .start(wait = true)
+    val config = loadConfig()
+    embeddedServer(CIO, port = config.port, host = config.host) {
+        module(config)
+    }.start(wait = true)
 }
 
-fun Application.module() {
+fun Application.module(config: AppConfig = loadConfig()) {
     configureHTTP()
     configureSerialization()
-    configureDatabases()
+    configureDatabases(dbPath = config.dbPath)
     configureRouting(
-        tasksRepository = TasksRepository.buildInMemory(emptyList()),
+        tasksRepository = TasksRepository.create(db),
     )
 }
