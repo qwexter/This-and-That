@@ -45,6 +45,10 @@ val unimplementedTasksRepository: Application.() -> TasksRepository
             ): Task? {
                 TODO("Not yet implemented")
             }
+
+            override suspend fun deleteTask(taskId: TaskId): Boolean {
+                TODO("Not yet implemented")
+            }
         }
     }
 

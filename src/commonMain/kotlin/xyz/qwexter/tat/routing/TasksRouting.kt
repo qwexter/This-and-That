@@ -5,6 +5,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
@@ -24,7 +25,7 @@ fun Application.tasksRouting(tasksRepository: TasksRepository) {
             get("/{taskId}") {
                 val taskId = TaskId(call.parameters["taskId"]!!)
                 val task = tasksRepository.getTaskById(taskId)
-                if (task == null) {
+                if (task == null || task.deletedAt != null) {
                     call.respond(HttpStatusCode.NotFound)
                     return@get
                 }
@@ -48,6 +49,15 @@ fun Application.tasksRouting(tasksRepository: TasksRepository) {
                     return@patch
                 }
                 call.respond(task.toApi())
+            }
+            delete("/{taskId}") {
+                val taskId = TaskId(call.parameters["taskId"]!!)
+                val deleted = tasksRepository.deleteTask(taskId)
+                if (!deleted) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@delete
+                }
+                call.respond(HttpStatusCode.NoContent)
             }
             post {
                 val addTask = call.receive<AddTask>()

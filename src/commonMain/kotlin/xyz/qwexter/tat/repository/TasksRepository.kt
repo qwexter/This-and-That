@@ -63,6 +63,8 @@ interface TasksRepository {
         deadline: LocalDateTime? = null,
     ): Task?
 
+    suspend fun deleteTask(taskId: TaskId): Boolean
+
     companion object {
         fun buildInMemory(initial: List<Task>): TasksRepository = InMemory(initial)
 
@@ -176,6 +178,18 @@ private class DbTaskRepository(
             )
         }
     }
+
+    override suspend fun deleteTask(taskId: TaskId): Boolean = withContext(dbDispatcher) {
+        val existing = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()
+        if (existing == null || existing.task_deleted_at != null) return@withContext false
+        val now = Clock.System.now().toEpochMilliseconds()
+        db.tatDatabaseQueries.softDeleteTask(
+            task_deleted_at = now,
+            updated_at = now,
+            id = taskId.id,
+        )
+        true
+    }
 }
 
 private class InMemory(initial: List<Task>) : TasksRepository {
@@ -233,5 +247,13 @@ private class InMemory(initial: List<Task>) : TasksRepository {
         )
         allTasks[idx] = updated
         return updated
+    }
+
+    override suspend fun deleteTask(taskId: TaskId): Boolean {
+        val idx = allTasks.indexOfFirst { it.id == taskId && it.deletedAt == null }
+        if (idx == -1) return false
+        val now = Clock.System.now()
+        allTasks[idx] = allTasks[idx].copy(deletedAt = now, updatedAt = now)
+        return true
     }
 }
