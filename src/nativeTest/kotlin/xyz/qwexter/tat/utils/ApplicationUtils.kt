@@ -22,7 +22,7 @@ internal fun todoApp(
         application {
             configureHTTP()
             configureSerialization()
-            configureDatabases(inMemoryDriver(TatDatabase.Schema))
+            configureDatabases(driver = inMemoryDriver(TatDatabase.Schema))
             configureRouting(tasksRepository = taskRepositoryFactory())
         }
         client = createClient { install(ContentNegotiation) { json() } }
