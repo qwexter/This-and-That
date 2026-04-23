@@ -74,26 +74,58 @@ Detekt config: `config/detekt/detekt.yml`. Active rule sets: `formatting`, `styl
 
 The server listens on `http://0.0.0.0:8080`.
 
-### Todos
+All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-clock datetime (`YYYY-MM-DDTHH:mm:ss`) with no timezone — the client owns timezone semantics for display.
 
-| Method | Path   | Body       | Description         |
-|--------|--------|------------|---------------------|
-| GET    | /todos | —          | List all todo items |
-| POST   | /todos | plain text | Create a new todo   |
+### Tasks
+
+| Method | Path    | Body | Description           |
+|--------|---------|------|-----------------------|
+| GET    | /tasks  | —    | List all active tasks |
+| POST   | /tasks  | JSON | Create a new task     |
+
+**POST body (`AddTask`):**
+```json
+{
+  "name": "Buy milk",
+  "description": null,
+  "status": null,
+  "priority": null,
+  "deadline": null
+}
+```
+
+- `name`: required, must not be blank — leading/trailing whitespace is trimmed
+- `status`: `"Todo"` (default) | `"Done"`
+- `priority`: `"Low"` (default) | `"Medium"` | `"High"`
+- `description`: optional string
+- `deadline`: optional local datetime, format `"2026-06-15T23:59:59"` (no timezone)
+
+**Error responses:**
+
+| Status | When                                        |
+|--------|---------------------------------------------|
+| 400    | Malformed JSON, missing required fields, blank name |
+| 500    | Unexpected server error                     |
 
 **Examples:**
 ```bash
-# Create todos
-curl -X POST http://localhost:8080/todos -d "Buy milk"
-curl -X POST http://localhost:8080/todos -d "Write code"
+# Create a task
+curl -X POST http://localhost:8080/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Buy milk","description":null,"status":null,"priority":null,"deadline":null}'
 
-# List all
-curl http://localhost:8080/todos
-# #1 Buy milk done=0
-# #2 Write code done=0
+# Create a task with deadline
+curl -X POST http://localhost:8080/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Pay bills","description":null,"status":"Todo","priority":"High","deadline":"2026-06-15T23:59:59"}'
+
+# List all active tasks
+curl http://localhost:8080/tasks
 ```
 
 ## Database
 
 SQLite database file `tat.db` is created in the working directory on first run.
 Schema is managed by SQLDelight — `.sq` files live in `src/commonMain/sqldelight/`.
+
+Timestamps (`created_at`, `updated_at`, `deleted_at`) are stored as Unix epoch milliseconds (UTC). `deadline` is stored as epoch milliseconds (UTC) and round-tripped as a local datetime — no server-side timezone conversion occurs.
