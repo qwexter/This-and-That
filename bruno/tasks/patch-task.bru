@@ -1,0 +1,25 @@
+meta {
+  name: Update task
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/tasks/:id
+  body: json
+  auth: none
+}
+
+params:path {
+  id: some-task-id
+}
+
+body:json {
+  {
+    "name": "Updated name",
+    "description": "Updated description",
+    "status": "Done",
+    "priority": "High",
+    "deadline": null
+  }
+}

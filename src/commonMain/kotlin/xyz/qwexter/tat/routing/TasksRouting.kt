@@ -6,6 +6,7 @@ import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -28,6 +29,24 @@ fun Application.tasksRouting(tasksRepository: TasksRepository) {
                     return@get
                 }
 
+                call.respond(task.toApi())
+            }
+            patch("/{taskId}") {
+                val taskId = TaskId(call.parameters["taskId"]!!)
+                val body = call.receive<UpdateTask>()
+                if (body.name != null && body.name.isBlank()) throw BadRequestException("name must not be blank")
+                val task = tasksRepository.updateTask(
+                    taskId = taskId,
+                    name = body.name?.trim(),
+                    description = body.description,
+                    status = body.status?.toDomain(),
+                    priority = body.priority?.toDomain(),
+                    deadline = body.deadline,
+                )
+                if (task == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@patch
+                }
                 call.respond(task.toApi())
             }
             post {

@@ -64,6 +64,13 @@ SET
     updated_at = :updated_at
 WHERE id = :id AND task_deleted_at IS NULL;
 
+updateTaskPriority:
+UPDATE task
+SET
+    priority = :priority,
+    updated_at = :updated_at
+WHERE id = :id AND task_deleted_at IS NULL;
+
 softDeleteTask:
 UPDATE task
 SET
