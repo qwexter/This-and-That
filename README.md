@@ -109,24 +109,9 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 | 404    | Task not found                              |
 | 500    | Unexpected server error                     |
 
-**Examples:**
-```bash
-# Create a task
-curl -X POST http://localhost:8080/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Buy milk","description":null,"status":null,"priority":null,"deadline":null}'
+See `bruno/` for a [Bruno](https://www.usebruno.com/) collection with ready-to-run requests.
 
-# Create a task with deadline
-curl -X POST http://localhost:8080/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Pay bills","description":null,"status":"Todo","priority":"High","deadline":"2026-06-15T23:59:59"}'
-
-# List all active tasks
-curl http://localhost:8080/tasks
-
-# Get task by ID
-curl http://localhost:8080/tasks/some-task-id
-```
+> to run locally: bru run --env local
 
 ## Database
 
