@@ -78,13 +78,12 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 
 ### Tasks
 
-| Method | Path                    | Body | Description            |
-|--------|-------------------------|------|------------------------|
-| GET    | /tasks                  | —    | List all active tasks  |
-| GET    | /tasks/{id}             | —    | Get task by ID         |
-| POST   | /tasks                  | JSON | Create a new task      |
-| PATCH  | /tasks/{id}/status      | JSON | Update task status     |
-| PATCH  | /tasks/{id}/priority    | JSON | Update task priority   |
+| Method | Path         | Body | Description           |
+|--------|--------------|------|-----------------------|
+| GET    | /tasks       | —    | List all active tasks |
+| GET    | /tasks/{id}  | —    | Get task by ID        |
+| POST   | /tasks       | JSON | Create a new task     |
+| PATCH  | /tasks/{id}  | JSON | Partial update a task |
 
 **Error responses:**
 

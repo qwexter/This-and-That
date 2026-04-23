@@ -31,20 +31,18 @@ fun Application.tasksRouting(tasksRepository: TasksRepository) {
 
                 call.respond(task.toApi())
             }
-            patch("/{taskId}/status") {
+            patch("/{taskId}") {
                 val taskId = TaskId(call.parameters["taskId"]!!)
-                val body = call.receive<UpdateTaskStatus>()
-                val task = tasksRepository.updateTaskStatus(taskId, body.status.toDomain())
-                if (task == null) {
-                    call.respond(HttpStatusCode.NotFound)
-                    return@patch
-                }
-                call.respond(task.toApi())
-            }
-            patch("/{taskId}/priority") {
-                val taskId = TaskId(call.parameters["taskId"]!!)
-                val body = call.receive<UpdateTaskPriority>()
-                val task = tasksRepository.updateTaskPriority(taskId, body.priority.toDomain())
+                val body = call.receive<UpdateTask>()
+                if (body.name != null && body.name.isBlank()) throw BadRequestException("name must not be blank")
+                val task = tasksRepository.updateTask(
+                    taskId = taskId,
+                    name = body.name?.trim(),
+                    description = body.description,
+                    status = body.status?.toDomain(),
+                    priority = body.priority?.toDomain(),
+                    deadline = body.deadline,
+                )
                 if (task == null) {
                     call.respond(HttpStatusCode.NotFound)
                     return@patch
