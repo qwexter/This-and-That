@@ -34,6 +34,14 @@ val unimplementedTasksRepository: Application.() -> TasksRepository
             override suspend fun getTaskById(taskId: TaskId): Task? {
                 TODO("Not yet implemented")
             }
+
+            override suspend fun updateTaskStatus(taskId: TaskId, status: TaskStatus): Task? {
+                TODO("Not yet implemented")
+            }
+
+            override suspend fun updateTaskPriority(taskId: TaskId, priority: TaskPriority): Task? {
+                TODO("Not yet implemented")
+            }
         }
     }
 

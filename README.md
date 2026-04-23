@@ -78,28 +78,13 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 
 ### Tasks
 
-| Method | Path           | Body | Description           |
-|--------|----------------|------|-----------------------|
-| GET    | /tasks         | —    | List all active tasks |
-| GET    | /tasks/{id}    | —    | Get task by ID        |
-| POST   | /tasks         | JSON | Create a new task     |
-
-**POST body (`AddTask`):**
-```json
-{
-  "name": "Buy milk",
-  "description": null,
-  "status": null,
-  "priority": null,
-  "deadline": null
-}
-```
-
-- `name`: required, must not be blank — leading/trailing whitespace is trimmed
-- `status`: `"Todo"` (default) | `"Done"`
-- `priority`: `"Low"` (default) | `"Medium"` | `"High"`
-- `description`: optional string
-- `deadline`: optional local datetime, format `"2026-06-15T23:59:59"` (no timezone)
+| Method | Path                    | Body | Description            |
+|--------|-------------------------|------|------------------------|
+| GET    | /tasks                  | —    | List all active tasks  |
+| GET    | /tasks/{id}             | —    | Get task by ID         |
+| POST   | /tasks                  | JSON | Create a new task      |
+| PATCH  | /tasks/{id}/status      | JSON | Update task status     |
+| PATCH  | /tasks/{id}/priority    | JSON | Update task priority   |
 
 **Error responses:**
 

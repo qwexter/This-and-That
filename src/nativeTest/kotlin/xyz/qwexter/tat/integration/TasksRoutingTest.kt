@@ -3,6 +3,7 @@ package xyz.qwexter.tat.integration
 import io.ktor.client.call.body
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -19,6 +20,8 @@ import xyz.qwexter.tat.routing.ActiveTask
 import xyz.qwexter.tat.routing.AddTask
 import xyz.qwexter.tat.routing.ApiTaskPriority
 import xyz.qwexter.tat.routing.ApiTaskStatus
+import xyz.qwexter.tat.routing.UpdateTaskPriority
+import xyz.qwexter.tat.routing.UpdateTaskStatus
 import xyz.qwexter.tat.routing.toApi
 import xyz.qwexter.tat.utils.createTasksRepositoryDb
 import xyz.qwexter.tat.utils.createTasksRepositoryInMemoryList
@@ -294,6 +297,100 @@ class TasksRoutingTest {
     ) {
         val response = client.get("tasks/ ")
         assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `PATCH task status updates and returns task`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val task = testTasks.first { it.status == TaskStatus.Todo }
+        val response = client.patch("tasks/${task.id.id}/status") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            setBody(UpdateTaskStatus(status = ApiTaskStatus.Done))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(ApiTaskStatus.Done, response.body<ActiveTask>().status)
+    }
+
+    @Test
+    fun `PATCH task status returns 404 for unknown id`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val response = client.patch("tasks/unknown-id/status") {
+            contentType(ContentType.Application.Json)
+            setBody(UpdateTaskStatus(status = ApiTaskStatus.Done))
+        }
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `PATCH task status returns 400 on malformed JSON`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val response = client.patch("tasks/${testTasks.first().id.id}/status") {
+            contentType(ContentType.Application.Json)
+            setBody("{not valid json}")
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `PATCH task status returns 500 when repository fails`() = todoApp(
+        taskRepositoryFactory = unimplementedTasksRepository,
+    ) {
+        val response = client.patch("tasks/task-1/status") {
+            contentType(ContentType.Application.Json)
+            setBody(UpdateTaskStatus(status = ApiTaskStatus.Done))
+        }
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+    }
+
+    @Test
+    fun `PATCH task priority updates and returns task`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val task = testTasks.first { it.priority == TaskPriority.Low }
+        val response = client.patch("tasks/${task.id.id}/priority") {
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            setBody(UpdateTaskPriority(priority = ApiTaskPriority.High))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(ApiTaskPriority.High, response.body<ActiveTask>().priority)
+    }
+
+    @Test
+    fun `PATCH task priority returns 404 for unknown id`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val response = client.patch("tasks/unknown-id/priority") {
+            contentType(ContentType.Application.Json)
+            setBody(UpdateTaskPriority(priority = ApiTaskPriority.High))
+        }
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `PATCH task priority returns 400 on malformed JSON`() = todoApp(
+        taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
+    ) {
+        val response = client.patch("tasks/${testTasks.first().id.id}/priority") {
+            contentType(ContentType.Application.Json)
+            setBody("{not valid json}")
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `PATCH task priority returns 500 when repository fails`() = todoApp(
+        taskRepositoryFactory = unimplementedTasksRepository,
+    ) {
+        val response = client.patch("tasks/task-1/priority") {
+            contentType(ContentType.Application.Json)
+            setBody(UpdateTaskPriority(priority = ApiTaskPriority.High))
+        }
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
     }
 
 }

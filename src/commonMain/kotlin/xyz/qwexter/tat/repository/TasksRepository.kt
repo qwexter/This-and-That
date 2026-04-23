@@ -54,6 +54,10 @@ interface TasksRepository {
 
     suspend fun getTaskById(taskId: TaskId): Task?
 
+    suspend fun updateTaskStatus(taskId: TaskId, status: TaskStatus): Task?
+
+    suspend fun updateTaskPriority(taskId: TaskId, priority: TaskPriority): Task?
+
     companion object {
         fun buildInMemory(initial: List<Task>): TasksRepository = InMemory(initial)
 
@@ -133,6 +137,42 @@ private class DbTaskRepository(
             deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
         )
     }
+
+    override suspend fun updateTaskStatus(taskId: TaskId, status: TaskStatus): Task? = withContext(dbDispatcher) {
+        val updatedAt = Clock.System.now().toEpochMilliseconds()
+        db.tatDatabaseQueries.updateTaskStatus(status = status.toDb(), updated_at = updatedAt, id = taskId.id)
+        db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()?.let { dbItem ->
+            Task(
+                id = TaskId(dbItem.id),
+                name = TaskName(dbItem.name),
+                description = dbItem.description,
+                status = dbItem.status.toTaskStatus(),
+                priority = dbItem.priority.toTaskPriority(),
+                deadline = dbItem.deadline?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC) },
+                createdAt = Instant.fromEpochMilliseconds(dbItem.created_at),
+                updatedAt = dbItem.updated_at?.let { Instant.fromEpochMilliseconds(it) },
+                deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
+            )
+        }
+    }
+
+    override suspend fun updateTaskPriority(taskId: TaskId, priority: TaskPriority): Task? = withContext(dbDispatcher) {
+        val updatedAt = Clock.System.now().toEpochMilliseconds()
+        db.tatDatabaseQueries.updateTaskPriority(priority = priority.toDb(), updated_at = updatedAt, id = taskId.id)
+        db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()?.let { dbItem ->
+            Task(
+                id = TaskId(dbItem.id),
+                name = TaskName(dbItem.name),
+                description = dbItem.description,
+                status = dbItem.status.toTaskStatus(),
+                priority = dbItem.priority.toTaskPriority(),
+                deadline = dbItem.deadline?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC) },
+                createdAt = Instant.fromEpochMilliseconds(dbItem.created_at),
+                updatedAt = dbItem.updated_at?.let { Instant.fromEpochMilliseconds(it) },
+                deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
+            )
+        }
+    }
 }
 
 private class InMemory(initial: List<Task>) : TasksRepository {
@@ -167,5 +207,21 @@ private class InMemory(initial: List<Task>) : TasksRepository {
 
     override suspend fun getTaskById(taskId: TaskId): Task? {
         return allTasks.find { it.id == taskId }
+    }
+
+    override suspend fun updateTaskStatus(taskId: TaskId, status: TaskStatus): Task? {
+        val idx = allTasks.indexOfFirst { it.id == taskId && it.deletedAt == null }
+        if (idx == -1) return null
+        val updated = allTasks[idx].copy(status = status, updatedAt = Clock.System.now())
+        allTasks[idx] = updated
+        return updated
+    }
+
+    override suspend fun updateTaskPriority(taskId: TaskId, priority: TaskPriority): Task? {
+        val idx = allTasks.indexOfFirst { it.id == taskId && it.deletedAt == null }
+        if (idx == -1) return null
+        val updated = allTasks[idx].copy(priority = priority, updatedAt = Clock.System.now())
+        allTasks[idx] = updated
+        return updated
     }
 }

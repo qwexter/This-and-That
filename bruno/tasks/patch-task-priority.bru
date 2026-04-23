@@ -1,0 +1,21 @@
+meta {
+  name: Update task priority
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/tasks/:id/priority
+  body: json
+  auth: none
+}
+
+params:path {
+  id: some-task-id
+}
+
+body:json {
+  {
+    "priority": "High"
+  }
+}

@@ -61,3 +61,9 @@ data class AddTask(
     val priority: ApiTaskPriority?,
     val deadline: LocalDateTime?,
 )
+
+@Serializable
+data class UpdateTaskStatus(val status: ApiTaskStatus)
+
+@Serializable
+data class UpdateTaskPriority(val priority: ApiTaskPriority)

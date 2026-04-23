@@ -6,6 +6,7 @@ import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -28,6 +29,26 @@ fun Application.tasksRouting(tasksRepository: TasksRepository) {
                     return@get
                 }
 
+                call.respond(task.toApi())
+            }
+            patch("/{taskId}/status") {
+                val taskId = TaskId(call.parameters["taskId"]!!)
+                val body = call.receive<UpdateTaskStatus>()
+                val task = tasksRepository.updateTaskStatus(taskId, body.status.toDomain())
+                if (task == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@patch
+                }
+                call.respond(task.toApi())
+            }
+            patch("/{taskId}/priority") {
+                val taskId = TaskId(call.parameters["taskId"]!!)
+                val body = call.receive<UpdateTaskPriority>()
+                val task = tasksRepository.updateTaskPriority(taskId, body.priority.toDomain())
+                if (task == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@patch
+                }
                 call.respond(task.toApi())
             }
             post {
