@@ -1,0 +1,15 @@
+meta {
+  name: Delete task
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/tasks/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: some-task-id
+}
