@@ -8,6 +8,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import xyz.qwexter.db
 import xyz.qwexter.tat.models.Task
+import xyz.qwexter.tat.models.TaskId
 import xyz.qwexter.tat.models.TaskPriority
 import xyz.qwexter.tat.models.TaskStatus
 import xyz.qwexter.tat.repository.TasksRepository
@@ -27,6 +28,10 @@ val unimplementedTasksRepository: Application.() -> TasksRepository
                 priority: TaskPriority,
                 deadline: LocalDateTime?,
             ): Task {
+                TODO("Not yet implemented")
+            }
+
+            override suspend fun getTaskById(taskId: TaskId): Task? {
                 TODO("Not yet implemented")
             }
         }

@@ -43,6 +43,7 @@ internal fun TaskPriority.toDb(): String = when (this) {
 
 interface TasksRepository {
     suspend fun allActiveTasks(): List<Task>
+
     suspend fun createTask(
         name: String,
         description: String?,
@@ -50,6 +51,8 @@ interface TasksRepository {
         priority: TaskPriority = TaskPriority.Low,
         deadline: LocalDateTime?,
     ): Task
+
+    suspend fun getTaskById(taskId: TaskId): Task?
 
     companion object {
         fun buildInMemory(initial: List<Task>): TasksRepository = InMemory(initial)
@@ -115,6 +118,21 @@ private class DbTaskRepository(
         )
         newTask
     }
+
+    override suspend fun getTaskById(taskId: TaskId): Task? = withContext(dbDispatcher) {
+        val dbItem = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull() ?: return@withContext null
+        Task(
+            id = TaskId(dbItem.id),
+            name = TaskName(dbItem.name),
+            description = dbItem.description,
+            status = dbItem.status.toTaskStatus(),
+            priority = dbItem.priority.toTaskPriority(),
+            deadline = dbItem.deadline?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC) },
+            createdAt = Instant.fromEpochMilliseconds(dbItem.created_at),
+            updatedAt = dbItem.updated_at?.let { Instant.fromEpochMilliseconds(it) },
+            deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
+        )
+    }
 }
 
 private class InMemory(initial: List<Task>) : TasksRepository {
@@ -145,5 +163,9 @@ private class InMemory(initial: List<Task>) : TasksRepository {
         )
         allTasks += task
         return task
+    }
+
+    override suspend fun getTaskById(taskId: TaskId): Task? {
+        return allTasks.find { it.id == taskId }
     }
 }
