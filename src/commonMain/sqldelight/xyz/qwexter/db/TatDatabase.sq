@@ -6,21 +6,21 @@ CREATE TABLE IF NOT EXISTS task (
     description TEXT,
 
     priority TEXT NOT NULL
-        CHECK (priority IN ('Low', 'Medium', 'High', 'Vital')),
+        CHECK (priority IN ('Low', 'Medium', 'High')),
 
-    status TEXT NOT NULL DEFAULT 'todo'
-        CHECK (status IN ('todo', 'in_progress', 'done', 'blocked')),
+    status TEXT NOT NULL DEFAULT 'Todo'
+        CHECK (status IN ('Todo', 'Done')),
 
     deadline INTEGER, -- Unix timestamp (nullable)
 
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    deleted_at INTEGER -- soft delete
+    updated_at INTEGER,
+    task_deleted_at INTEGER -- soft delete
 );
 
 -- Indexes for performance
-CREATE INDEX task_status_idx ON task(status);
-CREATE INDEX task_deleted_idx ON task(deleted_at);
+CREATE INDEX IF NOT EXISTS task_status_idx ON task(status);
+CREATE INDEX IF NOT EXISTS task_deleted_idx ON task(task_deleted_at);
 
 insertTask:
 INSERT INTO task(
@@ -32,44 +32,59 @@ INSERT INTO task(
     deadline,
     created_at,
     updated_at,
-    deleted_at
+    task_deleted_at
 )
-VALUES (?, ?, ?, ?, COALESCE(?, 'todo'), ?, ?, ?, NULL);
+VALUES (
+    :id,
+    :name,
+    :description,
+    :priority,
+    COALESCE(:status, 'Todo'),
+    :deadline,
+    :created_at,
+    :updated_at,
+    NULL
+);
 
 updateTask:
 UPDATE task
 SET
-    name = ?,
-    description = ?,
-    priority = ?,
-    status = ?,
-    deadline = ?,
-    updated_at = ?
-WHERE id = ? AND deleted_at IS NULL;
+    name = :name,
+    description = :description,
+    priority = :priority,
+    status = :status,
+    deadline = :deadline,
+    updated_at = :updated_at
+WHERE id = :id AND task_deleted_at IS NULL;
 
 updateTaskStatus:
 UPDATE task
 SET
-    status = ?,
-    updated_at = ?
-WHERE id = ? AND deleted_at IS NULL;
+    status = :status,
+    updated_at = :updated_at
+WHERE id = :id AND task_deleted_at IS NULL;
 
 softDeleteTask:
 UPDATE task
 SET
-    deleted_at = ?,
-    updated_at = ?
-WHERE id = ? AND deleted_at IS NULL;
+    task_deleted_at = :task_deleted_at,
+    updated_at = :updated_at
+WHERE id = :id AND task_deleted_at IS NULL;
 
 restoreTask:
 UPDATE task
 SET
-    deleted_at = NULL,
-    updated_at = ?
-WHERE id = ?;
+    task_deleted_at = NULL,
+    updated_at = :updated_at
+WHERE id = :id;
 
 selectTaskById:
-SELECT *
+SELECT id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
 FROM task
-WHERE id = ?
+WHERE id = :id
 LIMIT 1;
+
+selectAllActive:
+SELECT id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
+FROM task
+WHERE task_deleted_at IS NULL;

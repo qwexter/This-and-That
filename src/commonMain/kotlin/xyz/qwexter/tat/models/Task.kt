@@ -1,12 +1,10 @@
 package xyz.qwexter.tat.models
 
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
-import kotlinx.serialization.Serializable
 
-@Serializable
 value class TaskId(val id: String)
 
-@Serializable
 value class TaskName(val name: String)
 
 enum class TaskPriority {
@@ -20,7 +18,6 @@ enum class TaskStatus {
     Done,
 }
 
-@Serializable
 data class Task(
     val id: TaskId,
     val name: TaskName,
@@ -28,7 +25,7 @@ data class Task(
     val status: TaskStatus = TaskStatus.Todo,
     val priority: TaskPriority = TaskPriority.Low,
     val deadline: LocalDateTime?,
-    val createdAt: LocalDateTime,
-    val updatedAt: LocalDateTime?,
-    val deletedAt: LocalDateTime?,
+    val createdAt: Instant,
+    val updatedAt: Instant?,
+    val deletedAt: Instant?,
 )
