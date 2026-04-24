@@ -12,10 +12,10 @@ export interface Task {
 
 export interface AddTask {
 	name: string;
-	description?: string | null;
-	status?: TaskStatus;
-	priority?: TaskPriority;
-	deadline?: string | null;
+	description: string | null;
+	status: TaskStatus | null;
+	priority: TaskPriority;
+	deadline: string | null;
 }
 
 export interface UpdateTask {
