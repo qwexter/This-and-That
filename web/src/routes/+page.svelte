@@ -24,7 +24,7 @@
 		if (!newName.trim()) return;
 		adding = true;
 		try {
-			const body: AddTask = { name: newName.trim(), priority: newPriority };
+			const body: AddTask = { name: newName.trim(), priority: newPriority, description: null, status: null, deadline: null };
 			const task = await api.createTask(body);
 			tasks = [...tasks, task];
 			newName = '';
