@@ -482,6 +482,14 @@ class TasksRoutingTest {
     }
 
     @Test
+    fun `DELETE task returns 500 when repository fails`() = todoApp(
+        taskRepositoryFactory = unimplementedTasksRepository,
+    ) {
+        val response = client.delete("tasks/task-1")
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+    }
+
+    @Test
     fun `DELETE task returns 404 for GET after deletion`() = todoApp(
         taskRepositoryFactory = createTasksRepositoryInMemoryList(initial = testTasks),
     ) {
@@ -489,14 +497,6 @@ class TasksRoutingTest {
         client.delete("tasks/${task.id.id}")
         val getResponse = client.get("tasks/${task.id.id}")
         assertEquals(HttpStatusCode.NotFound, getResponse.status)
-    }
-
-    @Test
-    fun `DELETE task returns 500 when repository fails`() = todoApp(
-        taskRepositoryFactory = unimplementedTasksRepository,
-    ) {
-        val response = client.delete("tasks/task-1")
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
     }
 
 }

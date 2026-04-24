@@ -11,6 +11,9 @@ private val DatabaseKey = AttributeKey<TatDatabase>("TatDatabase")
 val Application.db: TatDatabase
     get() = attributes[DatabaseKey]
 
-fun Application.configureDatabases(driver: SqlDriver = NativeSqliteDriver(TatDatabase.Schema, "tat.db")) {
+fun Application.configureDatabases(
+    dbPath: String = "tat.db",
+    driver: SqlDriver = NativeSqliteDriver(TatDatabase.Schema, dbPath),
+) {
     attributes.put(DatabaseKey, TatDatabase(driver))
 }

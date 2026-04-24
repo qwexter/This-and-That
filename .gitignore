@@ -37,3 +37,7 @@ out/
 
 ### LLMs
 .claude
+
+### Env
+.env
+*.db
