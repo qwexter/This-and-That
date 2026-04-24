@@ -18,5 +18,7 @@ fun Application.module(config: AppConfig = loadConfig()) {
     configureDatabases(dbPath = config.dbPath)
     configureRouting(
         tasksRepository = TasksRepository.create(db),
+        corsEnabled = config.staticPath == null,
     )
+    config.staticPath?.let { configureStatic(it) }
 }

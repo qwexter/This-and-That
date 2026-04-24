@@ -8,6 +8,7 @@ data class AppConfig(
     val host: String,
     val port: Int,
     val dbPath: String,
+    val staticPath: String?,
 )
 
 @OptIn(ExperimentalForeignApi::class)
@@ -17,6 +18,7 @@ fun loadConfig(): AppConfig {
     val port = env("PORT")?.toIntOrNull() ?: 8080
     val host = env("HOST") ?: "0.0.0.0"
     val dbPath = env("DB_PATH") ?: "tat.db"
+    val staticPath = env("STATIC_PATH")
 
-    return AppConfig(host = host, port = port, dbPath = dbPath)
+    return AppConfig(host = host, port = port, dbPath = dbPath, staticPath = staticPath)
 }
