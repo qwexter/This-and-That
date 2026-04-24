@@ -1,0 +1,17 @@
+meta {
+  name: CORS preflight - tasks
+  type: http
+  seq: 8
+}
+
+options {
+  url: {{baseUrl}}/tasks
+  body: none
+  auth: none
+}
+
+headers {
+  Origin: http://localhost:5173
+  Access-Control-Request-Method: POST
+  Access-Control-Request-Headers: Content-Type
+}

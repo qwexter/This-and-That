@@ -49,6 +49,7 @@ kotlin {
             implementation(libs.ktor.server.resources)
             implementation(libs.ktor.server.serialization.kotlinx.json)
             implementation(libs.ktor.server.status.pages)
+            implementation(libs.okio)
             implementation(libs.kotlinx.datetime)
             implementation(libs.sqldelight.native.driver)
         }
