@@ -98,6 +98,45 @@ See `bruno/` for a [Bruno](https://www.usebruno.com/) collection with ready-to-r
 
 > to run locally: bru run --env local
 
+## Web UI (PWA)
+
+SvelteKit 2 + Svelte 5 static SPA with PWA support. Lives in `web/`.
+
+| Library              | Version  | Purpose                        |
+|----------------------|----------|--------------------------------|
+| SvelteKit            | ^2.57.0  | App framework (static adapter) |
+| Svelte               | ^5.55.2  | UI (runes mode)                |
+| vite-plugin-pwa      | ^1.2.0   | Service worker + manifest      |
+| TypeScript           | ^6.0.2   | Type safety                    |
+
+### Dev
+
+```sh
+cd web
+npm install
+npm run dev        # Vite dev server on :5173, proxies /tasks → localhost:8080
+```
+
+Backend must be running on `localhost:8080` for API calls to work.
+
+### Build
+
+```sh
+npm run build      # Static output → web/build/
+npm run preview    # Preview production build
+```
+
+Serve `web/build/` with any static file server. Set `VITE_API_URL` env var when frontend and backend are on different origins:
+
+```sh
+# .env
+VITE_API_URL=http://your-backend-host:8080
+```
+
+### PWA
+
+Manifest name: **This and That** / short name **TaT**. Icons expected at `static/icons/icon-192.png` and `static/icons/icon-512.png`. Service worker uses `NetworkFirst` for `/tasks` with 5 s timeout fallback to cache.
+
 ## Database
 
 SQLite database file `tat.db` is created in the working directory on first run.
