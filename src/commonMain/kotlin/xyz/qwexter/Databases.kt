@@ -15,5 +15,6 @@ fun Application.configureDatabases(
     dbPath: String = "tat.db",
     driver: SqlDriver = NativeSqliteDriver(TatDatabase.Schema, dbPath),
 ) {
+    TatDatabase.Schema.create(driver)
     attributes.put(DatabaseKey, TatDatabase(driver))
 }
