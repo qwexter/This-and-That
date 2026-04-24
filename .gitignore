@@ -41,3 +41,9 @@ out/
 ### Env
 .env
 *.db
+
+### Web (SvelteKit)
+web/node_modules/
+web/build/
+web/.svelte-kit/
+web/.env

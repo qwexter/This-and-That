@@ -73,6 +73,29 @@ dependencies {
     detektPlugins(libs.detekt.rules.coroutines)
 }
 
+val isWindows = System.getProperty("os.name").startsWith("Windows")
+
+tasks.register<Exec>("webInstall") {
+    group = "web"
+    description = "Install web dependencies"
+    workingDir = file("web")
+    commandLine(if (isWindows) "npm.cmd" else "npm", "install")
+}
+
+tasks.register<Exec>("webDev") {
+    group = "web"
+    description = "Start Vite dev server"
+    workingDir = file("web")
+    commandLine(if (isWindows) "npm.cmd" else "npm", "run", "dev")
+}
+
+tasks.register<Exec>("webBuild") {
+    group = "web"
+    description = "Build web for production"
+    workingDir = file("web")
+    commandLine(if (isWindows) "npm.cmd" else "npm", "run", "build")
+}
+
 sqldelight {
 
     databases {
