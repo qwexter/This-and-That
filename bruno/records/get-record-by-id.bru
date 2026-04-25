@@ -1,0 +1,19 @@
+meta {
+  name: Get record by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/records/:id
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-Id: {{userId}}
+}
+
+params:path {
+  id: some-record-id
+}

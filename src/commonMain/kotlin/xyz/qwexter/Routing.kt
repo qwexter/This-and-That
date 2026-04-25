@@ -9,11 +9,14 @@ import io.ktor.server.resources.Resources
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.options
 import io.ktor.server.routing.routing
+import xyz.qwexter.tat.repository.RecordsRepository
 import xyz.qwexter.tat.repository.TasksRepository
+import xyz.qwexter.tat.routing.recordsRouting
 import xyz.qwexter.tat.routing.tasksRouting
 
 fun Application.configureRouting(
     tasksRepository: TasksRepository,
+    recordsRepository: RecordsRepository,
     authMode: AuthMode = AuthMode.NONE,
     corsEnabled: Boolean = false,
 ) {
@@ -30,7 +33,10 @@ fun Application.configureRouting(
         routing {
             options("/tasks") { call.respondCORSPreflight() }
             options("/tasks/{...}") { call.respondCORSPreflight() }
+            options("/records") { call.respondCORSPreflight() }
+            options("/records/{...}") { call.respondCORSPreflight() }
         }
     }
     tasksRouting(tasksRepository = tasksRepository, authMode = authMode, corsEnabled = corsEnabled)
+    recordsRouting(recordsRepository = recordsRepository, authMode = authMode, corsEnabled = corsEnabled)
 }

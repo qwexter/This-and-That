@@ -3,6 +3,7 @@ package xyz.qwexter
 import io.ktor.server.application.Application
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import xyz.qwexter.tat.repository.RecordsRepository
 import xyz.qwexter.tat.repository.TasksRepository
 
 fun main() {
@@ -18,6 +19,7 @@ fun Application.module(config: AppConfig = loadConfig()) {
     configureDatabases(dbPath = config.dbPath)
     configureRouting(
         tasksRepository = TasksRepository.create(db),
+        recordsRepository = RecordsRepository.create(db),
         authMode = config.authMode,
         corsEnabled = config.staticPath == null,
     )

@@ -25,6 +25,25 @@ CREATE INDEX IF NOT EXISTS task_status_idx ON task(status);
 CREATE INDEX IF NOT EXISTS task_deleted_idx ON task(task_deleted_at);
 CREATE INDEX IF NOT EXISTS task_owner_idx ON task(owner_id, task_deleted_at);
 
+CREATE TABLE IF NOT EXISTS record (
+    id TEXT NOT NULL PRIMARY KEY,
+
+    owner_id TEXT NOT NULL,
+
+    title TEXT NOT NULL
+        CHECK (length(title) <= 200),
+
+    content TEXT
+        CHECK (content IS NULL OR length(content) <= 5000),
+
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    record_deleted_at INTEGER -- soft delete
+);
+
+CREATE INDEX IF NOT EXISTS record_deleted_idx ON record(record_deleted_at);
+CREATE INDEX IF NOT EXISTS record_owner_idx ON record(owner_id, record_deleted_at);
+
 insertTask:
 INSERT INTO task(
     id,
@@ -100,3 +119,33 @@ selectAllActiveByOwner:
 SELECT id, owner_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
 FROM task
 WHERE owner_id = :owner_id AND task_deleted_at IS NULL;
+
+insertRecord:
+INSERT INTO record(id, owner_id, title, content, created_at, updated_at, record_deleted_at)
+VALUES (:id, :owner_id, :title, :content, :created_at, :updated_at, NULL);
+
+updateRecord:
+UPDATE record
+SET
+    title = :title,
+    content = :content,
+    updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+
+softDeleteRecord:
+UPDATE record
+SET
+    record_deleted_at = :record_deleted_at,
+    updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+
+selectRecordById:
+SELECT id, owner_id, title, content, created_at, updated_at, record_deleted_at
+FROM record
+WHERE id = :id
+LIMIT 1;
+
+selectAllActiveRecordsByOwner:
+SELECT id, owner_id, title, content, created_at, updated_at, record_deleted_at
+FROM record
+WHERE owner_id = :owner_id AND record_deleted_at IS NULL;

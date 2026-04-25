@@ -8,7 +8,11 @@
 
 <div class="app">
 	<header>
-		<a href="/">TaT</a>
+		<a href="/" class="brand">TaT</a>
+		<nav>
+			<a href="/">Tasks</a>
+			<a href="/records">Records</a>
+		</nav>
 	</header>
 	<main>
 		{@render children()}
@@ -41,11 +45,31 @@
 	}
 
 	header {
+		display: flex;
+		align-items: center;
+		gap: 1.5rem;
 		padding: 1rem 0;
+		border-bottom: 1px solid #2a2a4a;
+	}
+
+	.brand {
 		font-size: 1.25rem;
 		font-weight: 700;
 		letter-spacing: 0.05em;
-		border-bottom: 1px solid #2a2a4a;
+	}
+
+	nav {
+		display: flex;
+		gap: 1rem;
+	}
+
+	nav a {
+		font-size: 0.9rem;
+		color: #888;
+	}
+
+	nav a:hover {
+		color: #e2e2e2;
 	}
 
 	main {

@@ -1,4 +1,4 @@
-import type { AddTask, Task, UpdateTask } from './types';
+import type { AddTask, AddRecord, Record, Task, UpdateTask, UpdateRecord } from './types';
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
@@ -19,5 +19,13 @@ export const api = {
 		request<Task>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
 	updateTask: (id: string, body: UpdateTask) =>
 		request<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-	deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' })
+	deleteTask: (id: string) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
+
+	getRecords: () => request<Record[]>('/records'),
+	getRecord: (id: string) => request<Record>(`/records/${id}`),
+	createRecord: (body: AddRecord) =>
+		request<Record>('/records', { method: 'POST', body: JSON.stringify(body) }),
+	updateRecord: (id: string, body: UpdateRecord) =>
+		request<Record>(`/records/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+	deleteRecord: (id: string) => request<void>(`/records/${id}`, { method: 'DELETE' })
 };
