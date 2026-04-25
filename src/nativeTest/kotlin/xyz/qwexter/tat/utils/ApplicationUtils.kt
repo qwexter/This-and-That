@@ -7,6 +7,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.test.TestResult
+import xyz.qwexter.AuthMode
 import xyz.qwexter.configureDatabases
 import xyz.qwexter.configureHTTP
 import xyz.qwexter.configureRouting
@@ -16,6 +17,7 @@ import xyz.qwexter.tat.repository.TasksRepository
 
 internal fun todoApp(
     taskRepositoryFactory: Application.() -> TasksRepository = createTasksRepositoryInMemoryList(emptyList()),
+    authMode: AuthMode = AuthMode.NONE,
     block: suspend ApplicationTestBuilder.() -> Unit,
 ): TestResult =
     testApplication {
@@ -23,7 +25,7 @@ internal fun todoApp(
             configureHTTP()
             configureSerialization()
             configureDatabases(driver = inMemoryDriver(TatDatabase.Schema))
-            configureRouting(tasksRepository = taskRepositoryFactory())
+            configureRouting(tasksRepository = taskRepositoryFactory(), authMode = authMode)
         }
         client = createClient { install(ContentNegotiation) { json() } }
         block()

@@ -17,11 +17,12 @@ import xyz.qwexter.tat.repository.toDb
 val unimplementedTasksRepository: Application.() -> TasksRepository
     get() = {
         object : TasksRepository {
-            override suspend fun allActiveTasks(): List<Task> {
+            override suspend fun allActiveTasks(ownerId: String): List<Task> {
                 TODO("Not yet implemented")
             }
 
             override suspend fun createTask(
+                ownerId: String,
                 name: String,
                 description: String?,
                 status: TaskStatus,
@@ -31,11 +32,12 @@ val unimplementedTasksRepository: Application.() -> TasksRepository
                 TODO("Not yet implemented")
             }
 
-            override suspend fun getTaskById(taskId: TaskId): Task? {
+            override suspend fun getTaskById(ownerId: String, taskId: TaskId): Task? {
                 TODO("Not yet implemented")
             }
 
             override suspend fun updateTask(
+                ownerId: String,
                 taskId: TaskId,
                 name: String?,
                 description: String?,
@@ -46,7 +48,7 @@ val unimplementedTasksRepository: Application.() -> TasksRepository
                 TODO("Not yet implemented")
             }
 
-            override suspend fun deleteTask(taskId: TaskId): Boolean {
+            override suspend fun deleteTask(ownerId: String, taskId: TaskId): Boolean {
                 TODO("Not yet implemented")
             }
         }
@@ -66,6 +68,7 @@ fun createTasksRepositoryDb(
                     // use direct injection to DB to prevent autogeneration of ID and validation
                     db.tatDatabaseQueries.insertTask(
                         id = it.id.id,
+                        owner_id = it.ownerId,
                         name = it.name.name,
                         description = it.description,
                         priority = it.priority.toDb(),
@@ -79,6 +82,7 @@ fun createTasksRepositoryDb(
                             task_deleted_at = it.deletedAt.toEpochMilliseconds(),
                             updated_at = it.updatedAt?.toEpochMilliseconds(),
                             id = it.id.id,
+                            owner_id = it.ownerId,
                         )
                     }
                 }

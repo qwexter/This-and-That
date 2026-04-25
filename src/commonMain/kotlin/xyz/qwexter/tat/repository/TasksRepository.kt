@@ -42,9 +42,10 @@ internal fun TaskPriority.toDb(): String = when (this) {
 }
 
 interface TasksRepository {
-    suspend fun allActiveTasks(): List<Task>
+    suspend fun allActiveTasks(ownerId: String): List<Task>
 
     suspend fun createTask(
+        ownerId: String,
         name: String,
         description: String?,
         status: TaskStatus = TaskStatus.Todo,
@@ -52,9 +53,10 @@ interface TasksRepository {
         deadline: LocalDateTime?,
     ): Task
 
-    suspend fun getTaskById(taskId: TaskId): Task?
+    suspend fun getTaskById(ownerId: String, taskId: TaskId): Task?
 
     suspend fun updateTask(
+        ownerId: String,
         taskId: TaskId,
         name: String? = null,
         description: String? = null,
@@ -63,7 +65,7 @@ interface TasksRepository {
         deadline: LocalDateTime? = null,
     ): Task?
 
-    suspend fun deleteTask(taskId: TaskId): Boolean
+    suspend fun deleteTask(ownerId: String, taskId: TaskId): Boolean
 
     companion object {
         fun buildInMemory(initial: List<Task>): TasksRepository = InMemory(initial)
@@ -83,8 +85,8 @@ private class DbTaskRepository(
     private val dbDispatcher: CoroutineDispatcher,
 ) : TasksRepository {
 
-    override suspend fun allActiveTasks(): List<Task> = withContext(dbDispatcher) {
-        db.tatDatabaseQueries.selectAllActive().executeAsList().map { dbTask ->
+    override suspend fun allActiveTasks(ownerId: String): List<Task> = withContext(dbDispatcher) {
+        db.tatDatabaseQueries.selectAllActiveByOwner(ownerId).executeAsList().map { dbTask ->
             Task(
                 id = TaskId(dbTask.id),
                 name = TaskName(dbTask.name),
@@ -95,11 +97,13 @@ private class DbTaskRepository(
                 createdAt = Instant.fromEpochMilliseconds(dbTask.created_at),
                 updatedAt = dbTask.updated_at?.let { Instant.fromEpochMilliseconds(it) },
                 deletedAt = dbTask.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
+                ownerId = dbTask.owner_id,
             )
         }
     }
 
     override suspend fun createTask(
+        ownerId: String,
         name: String,
         description: String?,
         status: TaskStatus,
@@ -116,9 +120,11 @@ private class DbTaskRepository(
             createdAt = Clock.System.now(),
             updatedAt = null,
             deletedAt = null,
+            ownerId = ownerId,
         )
         db.tatDatabaseQueries.insertTask(
             id = newTask.id.id,
+            owner_id = ownerId,
             name = newTask.name.name,
             description = newTask.description,
             priority = newTask.priority.toDb(),
@@ -130,8 +136,9 @@ private class DbTaskRepository(
         newTask
     }
 
-    override suspend fun getTaskById(taskId: TaskId): Task? = withContext(dbDispatcher) {
+    override suspend fun getTaskById(ownerId: String, taskId: TaskId): Task? = withContext(dbDispatcher) {
         val dbItem = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull() ?: return@withContext null
+        if (dbItem.owner_id != ownerId) return@withContext null
         Task(
             id = TaskId(dbItem.id),
             name = TaskName(dbItem.name),
@@ -142,10 +149,12 @@ private class DbTaskRepository(
             createdAt = Instant.fromEpochMilliseconds(dbItem.created_at),
             updatedAt = dbItem.updated_at?.let { Instant.fromEpochMilliseconds(it) },
             deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
+            ownerId = ownerId,
         )
     }
 
     override suspend fun updateTask(
+        ownerId: String,
         taskId: TaskId,
         name: String?,
         description: String?,
@@ -154,6 +163,7 @@ private class DbTaskRepository(
         deadline: LocalDateTime?,
     ): Task? = withContext(dbDispatcher) {
         val current = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull() ?: return@withContext null
+        if (current.owner_id != ownerId) return@withContext null
         val updatedAt = Clock.System.now().toEpochMilliseconds()
         db.tatDatabaseQueries.updateTask(
             name = name ?: current.name,
@@ -163,6 +173,7 @@ private class DbTaskRepository(
             deadline = deadline?.toInstant(TimeZone.UTC)?.toEpochMilliseconds() ?: current.deadline,
             updated_at = updatedAt,
             id = taskId.id,
+            owner_id = ownerId,
         )
         db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()?.let { dbItem ->
             Task(
@@ -175,18 +186,22 @@ private class DbTaskRepository(
                 createdAt = Instant.fromEpochMilliseconds(dbItem.created_at),
                 updatedAt = dbItem.updated_at?.let { Instant.fromEpochMilliseconds(it) },
                 deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
+                ownerId = ownerId,
             )
         }
     }
 
-    override suspend fun deleteTask(taskId: TaskId): Boolean = withContext(dbDispatcher) {
+    override suspend fun deleteTask(ownerId: String, taskId: TaskId): Boolean = withContext(dbDispatcher) {
         val existing = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()
-        if (existing == null || existing.task_deleted_at != null) return@withContext false
+        if (existing == null || existing.task_deleted_at != null || existing.owner_id != ownerId) {
+            return@withContext false
+        }
         val now = Clock.System.now().toEpochMilliseconds()
         db.tatDatabaseQueries.softDeleteTask(
             task_deleted_at = now,
             updated_at = now,
             id = taskId.id,
+            owner_id = ownerId,
         )
         true
     }
@@ -196,11 +211,12 @@ private class InMemory(initial: List<Task>) : TasksRepository {
 
     private val allTasks = initial.toMutableList()
 
-    override suspend fun allActiveTasks(): List<Task> {
-        return allTasks.filter { it.deletedAt == null }.toList()
+    override suspend fun allActiveTasks(ownerId: String): List<Task> {
+        return allTasks.filter { it.ownerId == ownerId && it.deletedAt == null }.toList()
     }
 
     override suspend fun createTask(
+        ownerId: String,
         name: String,
         description: String?,
         status: TaskStatus,
@@ -209,6 +225,7 @@ private class InMemory(initial: List<Task>) : TasksRepository {
     ): Task {
         val task = Task(
             id = TaskId(Uuid.random().toString()),
+            ownerId = ownerId,
             name = TaskName(name),
             description = description,
             status = status,
@@ -222,11 +239,12 @@ private class InMemory(initial: List<Task>) : TasksRepository {
         return task
     }
 
-    override suspend fun getTaskById(taskId: TaskId): Task? {
-        return allTasks.find { it.id == taskId }
+    override suspend fun getTaskById(ownerId: String, taskId: TaskId): Task? {
+        return allTasks.find { it.id == taskId && it.ownerId == ownerId }
     }
 
     override suspend fun updateTask(
+        ownerId: String,
         taskId: TaskId,
         name: String?,
         description: String?,
@@ -234,7 +252,7 @@ private class InMemory(initial: List<Task>) : TasksRepository {
         priority: TaskPriority?,
         deadline: LocalDateTime?,
     ): Task? {
-        val idx = allTasks.indexOfFirst { it.id == taskId && it.deletedAt == null }
+        val idx = allTasks.indexOfFirst { it.id == taskId && it.ownerId == ownerId && it.deletedAt == null }
         if (idx == -1) return null
         val current = allTasks[idx]
         val updated = current.copy(
@@ -249,8 +267,8 @@ private class InMemory(initial: List<Task>) : TasksRepository {
         return updated
     }
 
-    override suspend fun deleteTask(taskId: TaskId): Boolean {
-        val idx = allTasks.indexOfFirst { it.id == taskId && it.deletedAt == null }
+    override suspend fun deleteTask(ownerId: String, taskId: TaskId): Boolean {
+        val idx = allTasks.indexOfFirst { it.id == taskId && it.ownerId == ownerId && it.deletedAt == null }
         if (idx == -1) return false
         val now = Clock.System.now()
         allTasks[idx] = allTasks[idx].copy(deletedAt = now, updatedAt = now)

@@ -42,15 +42,29 @@ Base URL: `VITE_API_URL` env var (default: same origin).
 | PATCH  | /tasks/{id}  | Partial update    |
 | DELETE | /tasks/{id}  | Soft-delete       |
 
+## Auth
+
+In production the app sits behind Caddy + Authelia. Caddy injects `X-User-Id` header after auth — the frontend never handles tokens or login directly. Authelia redirects unauthenticated users to its login page before the request reaches the app.
+
+`AUTH_MODE` is a backend env var:
+
+| Value | Behaviour |
+|-------|-----------|
+| `none` | Dev — hardcoded owner `dev-user`, no header required |
+| `header` | Prod — reads `X-User-Id` from Caddy, returns 401 if missing |
+
+See `docs/launch.md` for full deployment instructions.
+
 ## PWA
 
 - Manifest: name "This and That" / short "TaT", theme `#1a1a2e`, standalone display.
 - Icons: `static/icons/icon-192.png`, `static/icons/icon-512.png`.
 - Service worker: `NetworkFirst` for `/tasks/*` (5 s timeout → cache fallback), `autoUpdate` on new version.
+- Offline-first roadmap: `docs/offline-first-pwa.md`.
 
 ## Dev
 
-Backend must run on `localhost:8080`. Vite dev server proxies `/tasks` there.
+Backend must run on `localhost:8080` with `AUTH_MODE=none`. Vite dev server proxies `/tasks` there.
 
 ```sh
 npm install
