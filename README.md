@@ -1,8 +1,8 @@
 # This and That - TaT
 
 TaT is a solution for small task and record management, like a todo-list with a few extras:
-- [ ] todo items with severity and optional deadline
-- [ ] plain text records
+- [x] todo items with severity and optional deadline
+- [x] plain text records
 - [ ] grouping of tasks and records
 - [ ] ability to share access to a specific group (with equal rights to edit)
 - [ ] PWA application to be able to work offline with cached data
