@@ -1,0 +1,15 @@
+meta {
+  name: Get all active records
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/records
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-Id: {{userId}}
+}

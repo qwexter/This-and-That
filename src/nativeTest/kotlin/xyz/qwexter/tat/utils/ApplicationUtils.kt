@@ -13,10 +13,12 @@ import xyz.qwexter.configureHTTP
 import xyz.qwexter.configureRouting
 import xyz.qwexter.configureSerialization
 import xyz.qwexter.db.TatDatabase
+import xyz.qwexter.tat.repository.RecordsRepository
 import xyz.qwexter.tat.repository.TasksRepository
 
 internal fun todoApp(
     taskRepositoryFactory: Application.() -> TasksRepository = createTasksRepositoryInMemoryList(emptyList()),
+    recordsRepositoryFactory: Application.() -> RecordsRepository = { RecordsRepository.buildInMemory(emptyList()) },
     authMode: AuthMode = AuthMode.NONE,
     block: suspend ApplicationTestBuilder.() -> Unit,
 ): TestResult =
@@ -25,7 +27,11 @@ internal fun todoApp(
             configureHTTP()
             configureSerialization()
             configureDatabases(driver = inMemoryDriver(TatDatabase.Schema))
-            configureRouting(tasksRepository = taskRepositoryFactory(), authMode = authMode)
+            configureRouting(
+                tasksRepository = taskRepositoryFactory(),
+                recordsRepository = recordsRepositoryFactory(),
+                authMode = authMode,
+            )
         }
         client = createClient { install(ContentNegotiation) { json() } }
         block()

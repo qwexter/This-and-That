@@ -5,7 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
 	server: {
 		proxy: {
-			'/tasks': 'http://localhost:8080'
+			'/tasks': 'http://localhost:8080',
+			'/records': 'http://localhost:8080'
 		}
 	},
 	plugins: [
@@ -29,7 +30,7 @@ export default defineConfig({
 				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 				runtimeCaching: [
 					{
-						urlPattern: /\/tasks/,
+						urlPattern: /\/(tasks|records)/,
 						handler: 'NetworkFirst',
 						options: {
 							cacheName: 'api-cache',

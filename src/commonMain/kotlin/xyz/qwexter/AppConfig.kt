@@ -23,7 +23,7 @@ fun loadConfig(): AppConfig {
 
     val port = env("PORT")?.toIntOrNull() ?: 8080
     val host = env("HOST") ?: "0.0.0.0"
-    val dbPath = env("DB_PATH") ?: "tat.db"
+    val dbPath = env("DB_PATH") ?: "tat2.db"
     val staticPath = env("STATIC_PATH")
     val authMode = env("AUTH_MODE")?.uppercase()?.let {
         runCatching { AuthMode.valueOf(it) }.getOrNull()

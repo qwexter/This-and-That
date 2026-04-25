@@ -25,3 +25,19 @@ export interface UpdateTask {
 	priority?: TaskPriority;
 	deadline?: string | null;
 }
+
+export interface Record {
+	id: string;
+	title: string;
+	content: string | null;
+}
+
+export interface AddRecord {
+	title: string;
+	content?: string | null;
+}
+
+export interface UpdateRecord {
+	title?: string;
+	content?: string | null;
+}

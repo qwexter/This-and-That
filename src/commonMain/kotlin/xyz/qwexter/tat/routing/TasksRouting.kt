@@ -19,9 +19,6 @@ import xyz.qwexter.tat.models.TaskPriority
 import xyz.qwexter.tat.models.TaskStatus
 import xyz.qwexter.tat.repository.TasksRepository
 
-private const val DEV_OWNER_ID = "dev-user"
-private const val USER_ID_HEADER = "X-User-Id"
-
 fun Application.tasksRouting(
     tasksRepository: TasksRepository,
     authMode: AuthMode = AuthMode.NONE,
@@ -54,19 +51,6 @@ fun Application.tasksRouting(
                 val ownerId = call.resolveOwnerId(authMode) ?: return@post
                 call.postTask(tasksRepository, ownerId)
             }
-        }
-    }
-}
-
-private suspend fun ApplicationCall.resolveOwnerId(authMode: AuthMode): String? = when (authMode) {
-    AuthMode.NONE -> DEV_OWNER_ID
-    AuthMode.HEADER -> {
-        val id = request.headers[USER_ID_HEADER]
-        if (id.isNullOrBlank()) {
-            respond(HttpStatusCode.Unauthorized)
-            null
-        } else {
-            id
         }
     }
 }
