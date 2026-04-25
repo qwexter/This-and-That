@@ -10,6 +10,10 @@ get {
   auth: none
 }
 
+headers {
+  X-User-Id: {{userId}}
+}
+
 params:path {
   id: some-task-id
 }

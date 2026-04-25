@@ -24,7 +24,7 @@ class TasksRepositoryTest {
     fun `InMemory createTask records createdAt as Instant`() = runBlocking {
         val before = Clock.System.now()
         val repo = TasksRepository.buildInMemory(emptyList())
-        val task = repo.createTask(name = "test", description = null, deadline = null)
+        val task = repo.createTask(ownerId = "user-1", name = "test", description = null, deadline = null)
         val after = Clock.System.now()
 
         assertTrue(task.createdAt >= before)
@@ -35,10 +35,10 @@ class TasksRepositoryTest {
     fun `Db createTask round-trips createdAt without loss`() = runBlocking {
         val before = Clock.System.now().toEpochMilliseconds().let { Instant.fromEpochMilliseconds(it) }
         val repo = dbRepo()
-        repo.createTask(name = "test", description = null, deadline = null)
+        repo.createTask(ownerId = "user-1", name = "test", description = null, deadline = null)
         val after = Clock.System.now().toEpochMilliseconds().let { Instant.fromEpochMilliseconds(it) }
 
-        val loaded = repo.allActiveTasks().single()
+        val loaded = repo.allActiveTasks("user-1").single()
         assertTrue(loaded.createdAt >= before)
         assertTrue(loaded.createdAt <= after)
     }
@@ -47,9 +47,9 @@ class TasksRepositoryTest {
     fun `Db createTask round-trips deadline without TZ shift`() = runBlocking {
         val deadline = LocalDateTime.parse("2026-06-15T23:59:59")
         val repo = dbRepo()
-        repo.createTask(name = "test", description = null, deadline = deadline)
+        repo.createTask(ownerId = "user-1", name = "test", description = null, deadline = deadline)
 
-        assertEquals(deadline, repo.allActiveTasks().single().deadline)
+        assertEquals(deadline, repo.allActiveTasks("user-1").single().deadline)
     }
 
     @Test
@@ -57,26 +57,27 @@ class TasksRepositoryTest {
         val inMemory = TasksRepository.buildInMemory(emptyList())
         val fromDb = dbRepo()
 
-        val memTask = inMemory.createTask(name = "test", description = null, deadline = null)
+        val memTask = inMemory.createTask(ownerId = "user-1", name = "test", description = null, deadline = null)
         assertNull(memTask.updatedAt)
         assertNull(memTask.deletedAt)
 
-        fromDb.createTask(name = "test", description = null, deadline = null)
-        val dbTask = fromDb.allActiveTasks().single()
+        fromDb.createTask(ownerId = "user-1", name = "test", description = null, deadline = null)
+        val dbTask = fromDb.allActiveTasks("user-1").single()
         assertNull(dbTask.updatedAt)
         assertNull(dbTask.deletedAt)
     }
 
     @Test
     fun `allActiveTasks returns empty list when no tasks created`() = runBlocking {
-        assertTrue(TasksRepository.buildInMemory(emptyList()).allActiveTasks().isEmpty())
-        assertTrue(dbRepo().allActiveTasks().isEmpty())
+        assertTrue(TasksRepository.buildInMemory(emptyList()).allActiveTasks("user-1").isEmpty())
+        assertTrue(dbRepo().allActiveTasks("user-1").isEmpty())
     }
 
     @Test
     fun `InMemory allActiveTasks excludes soft-deleted tasks`() = runBlocking {
         val active = Task(
             id = TaskId("a"),
+            ownerId = "user-1",
             name = TaskName("Active"),
             description = null,
             status = TaskStatus.Todo,
@@ -92,7 +93,7 @@ class TasksRepositoryTest {
             deletedAt = Clock.System.now(),
         )
         val repo = TasksRepository.buildInMemory(listOf(active, deleted))
-        val result = repo.allActiveTasks()
+        val result = repo.allActiveTasks("user-1")
 
         assertEquals(1, result.size)
         assertEquals("a", result.single().id.id)

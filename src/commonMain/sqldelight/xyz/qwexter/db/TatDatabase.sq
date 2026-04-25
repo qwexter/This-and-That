@@ -2,6 +2,8 @@
 CREATE TABLE IF NOT EXISTS task (
     id TEXT NOT NULL PRIMARY KEY,
 
+    owner_id TEXT NOT NULL,
+
     name TEXT NOT NULL,
     description TEXT,
 
@@ -21,10 +23,12 @@ CREATE TABLE IF NOT EXISTS task (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS task_status_idx ON task(status);
 CREATE INDEX IF NOT EXISTS task_deleted_idx ON task(task_deleted_at);
+CREATE INDEX IF NOT EXISTS task_owner_idx ON task(owner_id, task_deleted_at);
 
 insertTask:
 INSERT INTO task(
     id,
+    owner_id,
     name,
     description,
     priority,
@@ -36,6 +40,7 @@ INSERT INTO task(
 )
 VALUES (
     :id,
+    :owner_id,
     :name,
     :description,
     :priority,
@@ -55,43 +60,43 @@ SET
     status = :status,
     deadline = :deadline,
     updated_at = :updated_at
-WHERE id = :id AND task_deleted_at IS NULL;
+WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
 
 updateTaskStatus:
 UPDATE task
 SET
     status = :status,
     updated_at = :updated_at
-WHERE id = :id AND task_deleted_at IS NULL;
+WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
 
 updateTaskPriority:
 UPDATE task
 SET
     priority = :priority,
     updated_at = :updated_at
-WHERE id = :id AND task_deleted_at IS NULL;
+WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
 
 softDeleteTask:
 UPDATE task
 SET
     task_deleted_at = :task_deleted_at,
     updated_at = :updated_at
-WHERE id = :id AND task_deleted_at IS NULL;
+WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
 
 restoreTask:
 UPDATE task
 SET
     task_deleted_at = NULL,
     updated_at = :updated_at
-WHERE id = :id;
+WHERE id = :id AND owner_id = :owner_id;
 
 selectTaskById:
-SELECT id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
+SELECT id, owner_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
 FROM task
 WHERE id = :id
 LIMIT 1;
 
-selectAllActive:
-SELECT id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
+selectAllActiveByOwner:
+SELECT id, owner_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
 FROM task
-WHERE task_deleted_at IS NULL;
+WHERE owner_id = :owner_id AND task_deleted_at IS NULL;

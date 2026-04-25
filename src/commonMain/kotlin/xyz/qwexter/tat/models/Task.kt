@@ -20,6 +20,7 @@ enum class TaskStatus {
 
 data class Task(
     val id: TaskId,
+    val ownerId: String,
     val name: TaskName,
     val description: String?,
     val status: TaskStatus = TaskStatus.Todo,

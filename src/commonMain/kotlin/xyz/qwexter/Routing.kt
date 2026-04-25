@@ -12,7 +12,11 @@ import io.ktor.server.routing.routing
 import xyz.qwexter.tat.repository.TasksRepository
 import xyz.qwexter.tat.routing.tasksRouting
 
-fun Application.configureRouting(tasksRepository: TasksRepository, corsEnabled: Boolean = false) {
+fun Application.configureRouting(
+    tasksRepository: TasksRepository,
+    authMode: AuthMode = AuthMode.NONE,
+    corsEnabled: Boolean = false,
+) {
     install(Resources)
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
@@ -28,5 +32,5 @@ fun Application.configureRouting(tasksRepository: TasksRepository, corsEnabled: 
             options("/tasks/{...}") { call.respondCORSPreflight() }
         }
     }
-    tasksRouting(tasksRepository = tasksRepository, corsEnabled = corsEnabled)
+    tasksRouting(tasksRepository = tasksRepository, authMode = authMode, corsEnabled = corsEnabled)
 }

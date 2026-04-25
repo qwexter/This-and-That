@@ -45,6 +45,7 @@ class TasksRoutingTest {
         // 1. Basic task (default values)
         Task(
             id = TaskId("task-1"),
+            ownerId = "dev-user",
             name = TaskName("Buy milk"),
             description = null,
             status = TaskStatus.Todo,
@@ -58,6 +59,7 @@ class TasksRoutingTest {
         // 2. Task with description + deadline
         Task(
             id = TaskId("task-2"),
+            ownerId = "dev-user",
             name = TaskName("Write report"),
             description = "Quarterly results",
             status = TaskStatus.Todo,
@@ -71,6 +73,7 @@ class TasksRoutingTest {
         // 3. Completed task
         Task(
             id = TaskId("task-3"),
+            ownerId = "dev-user",
             name = TaskName("Go to gym"),
             description = null,
             status = TaskStatus.Done,
@@ -84,6 +87,7 @@ class TasksRoutingTest {
         // 4. Overdue task (still Todo)
         Task(
             id = TaskId("task-4"),
+            ownerId = "dev-user",
             name = TaskName("Pay bills"),
             description = null,
             status = TaskStatus.Todo,
@@ -97,6 +101,7 @@ class TasksRoutingTest {
         // 5. Soft-deleted task (should NOT appear in GET)
         Task(
             id = TaskId("task-5"),
+            ownerId = "dev-user",
             name = TaskName("Old archived task"),
             description = null,
             status = TaskStatus.Done,
