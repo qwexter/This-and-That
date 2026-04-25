@@ -1,42 +1,72 @@
-# sv
+# TaT — Web UI
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit 2 + Svelte 5 static SPA, PWA-ready. Frontend for the [TaT](../README.md) task manager backend.
 
-## Creating a project
+## Stack
 
-If you're seeing this, you've probably already done this step. Congrats!
+| Library         | Version   | Purpose                         |
+|-----------------|-----------|---------------------------------|
+| SvelteKit       | ^2.57.0   | App framework (static adapter)  |
+| Svelte 5        | ^5.55.2   | UI — runes mode                 |
+| TypeScript      | ^6.0.2    | Type safety                     |
+| vite-plugin-pwa | ^1.2.0    | Service worker + manifest       |
 
-```sh
-# create a new project
-npx sv create my-app
+## Structure
+
+```
+src/
+├── lib/
+│   ├── api.ts       — fetch wrapper, all /tasks endpoints
+│   └── types.ts     — Task, AddTask, UpdateTask interfaces
+└── routes/
+    ├── +layout.svelte        — dark shell, "TaT" header
+    ├── +page.svelte          — task list (todo / done split, add form)
+    └── tasks/[id]/
+        └── +page.svelte      — task detail editor (PATCH / DELETE)
 ```
 
-To recreate this project with the same configuration:
+## State
+
+Svelte 5 runes only — no stores, no external state lib.
+- `$state` per-component, `$derived` for todo/done filters, `$effect` for load on mount.
+
+## API
+
+Base URL: `VITE_API_URL` env var (default: same origin).
+
+| Method | Path         | Description       |
+|--------|--------------|-------------------|
+| GET    | /tasks       | List tasks        |
+| GET    | /tasks/{id}  | Get task          |
+| POST   | /tasks       | Create task       |
+| PATCH  | /tasks/{id}  | Partial update    |
+| DELETE | /tasks/{id}  | Soft-delete       |
+
+## PWA
+
+- Manifest: name "This and That" / short "TaT", theme `#1a1a2e`, standalone display.
+- Icons: `static/icons/icon-192.png`, `static/icons/icon-512.png`.
+- Service worker: `NetworkFirst` for `/tasks/*` (5 s timeout → cache fallback), `autoUpdate` on new version.
+
+## Dev
+
+Backend must run on `localhost:8080`. Vite dev server proxies `/tasks` there.
 
 ```sh
-# recreate this project
-npx sv@0.15.1 create --template minimal --types ts --no-install web
+npm install
+npm run dev        # :5173
 ```
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Build
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+npm run build      # static output → build/
+npm run preview    # preview production build
 ```
 
-## Building
-
-To create a production version of your app:
+Set `VITE_API_URL` when frontend and backend are on different origins:
 
 ```sh
-npm run build
+# .env
+VITE_API_URL=http://your-backend-host:8080
 ```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
