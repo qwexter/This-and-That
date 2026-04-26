@@ -4,7 +4,7 @@
 	import { api } from '$lib/api';
 	import type { Group, Space, SpaceMember } from '$lib/types';
 
-	const id = $derived($page.params.id);
+	const id = $derived($page.params.id!);
 
 	let space = $state<Space | null>(null);
 	let members = $state<SpaceMember[]>([]);
