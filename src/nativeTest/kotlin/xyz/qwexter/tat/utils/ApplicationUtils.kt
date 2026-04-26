@@ -18,6 +18,7 @@ import xyz.qwexter.db.TatDatabase
 import xyz.qwexter.tat.repository.FeedRepository
 import xyz.qwexter.tat.repository.GroupsRepository
 import xyz.qwexter.tat.repository.RecordsRepository
+import xyz.qwexter.tat.repository.SpacesRepository
 import xyz.qwexter.tat.repository.TasksRepository
 
 internal fun todoApp(
@@ -31,12 +32,14 @@ internal fun todoApp(
             configureHTTP()
             configureSerialization()
             configureDatabases(driver = inMemoryDriver(TatDatabase.Schema))
+            val spacesRepository = SpacesRepository.create(db)
             configureRouting(
                 tasksRepository = taskRepositoryFactory(),
                 recordsRepository = recordsRepositoryFactory(),
                 authMode = authMode,
                 groupsRepository = GroupsRepository.create(db),
                 feedRepository = FeedRepository.create(db),
+                spacesRepository = spacesRepository,
                 corsEnabled = false,
             )
         }
@@ -58,6 +61,7 @@ internal fun dbApp(
                 recordsRepository = RecordsRepository.create(db),
                 groupsRepository = GroupsRepository.create(db),
                 feedRepository = FeedRepository.create(db),
+                spacesRepository = SpacesRepository.create(db),
                 authMode = authMode,
                 corsEnabled = false,
             )

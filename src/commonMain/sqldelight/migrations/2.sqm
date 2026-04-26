@@ -1,0 +1,26 @@
+CREATE TABLE IF NOT EXISTS space (
+    id TEXT NOT NULL PRIMARY KEY,
+
+    owner_id TEXT NOT NULL,
+
+    title TEXT NOT NULL
+        CHECK (length(title) <= 200),
+
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    space_deleted_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS space_owner_idx ON space(owner_id, space_deleted_at);
+
+CREATE TABLE IF NOT EXISTS space_member (
+    space_id TEXT NOT NULL REFERENCES space(id),
+    user_id  TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (space_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS space_member_user_idx ON space_member(user_id);
+
+ALTER TABLE tat_group ADD COLUMN space_id TEXT REFERENCES space(id);
+CREATE INDEX IF NOT EXISTS group_space_idx ON tat_group(space_id);

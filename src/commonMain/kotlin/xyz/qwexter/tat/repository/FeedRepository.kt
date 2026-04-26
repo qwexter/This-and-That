@@ -86,15 +86,15 @@ private class DbFeedRepository(
 
     override suspend fun getFeedPage(ownerId: String, limit: Long, offset: Long): FeedPage =
         withContext(dbDispatcher) {
-            val total = db.tatDatabaseQueries.countFeedEntries(ownerId).executeAsOne()
+            val total = db.tatDatabaseQueries.countFeedEntries(user_id = ownerId).executeAsOne()
             val pageRows = db.tatDatabaseQueries.selectFeedPage(
-                owner_id = ownerId,
+                user_id = ownerId,
                 lim = limit,
                 off = offset,
             ).executeAsList()
 
             val groupIds = pageRows.filter { it.kind == "group" }.map { it.id }
-            val groupChildren = loadGroupChildren(groupIds, ownerId)
+            val groupChildren = loadGroupChildren(groupIds)
             val taskRows = loadTaskRows(pageRows.filter { it.kind == "task" }.map { it.id })
             val recordRows = loadRecordRows(pageRows.filter { it.kind == "record" }.map { it.id })
             val groupRows = loadGroupRows(groupIds)
@@ -105,14 +105,14 @@ private class DbFeedRepository(
             FeedPage(items = entries, total = total, offset = offset, limit = limit)
         }
 
-    private fun loadGroupChildren(groupIds: List<String>, ownerId: String): Map<String, List<FeedChild>> {
+    private fun loadGroupChildren(groupIds: List<String>): Map<String, List<FeedChild>> {
         if (groupIds.isEmpty()) return emptyMap()
         val tasks = groupIds.flatMap { gid ->
-            db.tatDatabaseQueries.selectActiveTasksByGroup(group_id = gid, owner_id = ownerId)
+            db.tatDatabaseQueries.selectActiveTasksByGroup(group_id = gid)
                 .executeAsList().map { gid to it.toTaskChild() }
         }
         val records = groupIds.flatMap { gid ->
-            db.tatDatabaseQueries.selectActiveRecordsByGroup(group_id = gid, owner_id = ownerId)
+            db.tatDatabaseQueries.selectActiveRecordsByGroup(group_id = gid)
                 .executeAsList().map { gid to it.toRecordChild() }
         }
         return (tasks + records)

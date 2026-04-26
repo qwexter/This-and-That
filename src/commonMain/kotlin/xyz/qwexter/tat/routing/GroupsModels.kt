@@ -7,23 +7,28 @@ import xyz.qwexter.tat.models.Group
 
 internal fun Group.toApi(): ActiveGroup = ActiveGroup(
     id = this.id.id,
+    spaceId = this.spaceId?.id,
     title = this.title.title,
 )
 
 @Serializable
 data class ActiveGroup(
     val id: String,
+    val spaceId: String?,
     val title: String,
 )
 
 @Serializable
 data class AddGroup(
     val title: String,
+    val spaceId: String? = null,
 )
 
 @Serializable
 data class UpdateGroup(
-    val title: String,
+    val title: String? = null,
+    val spaceId: String? = null,
+    val clearSpace: Boolean = false,
 )
 
 @Serializable

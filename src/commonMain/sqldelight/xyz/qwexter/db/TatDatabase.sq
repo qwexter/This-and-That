@@ -1,7 +1,35 @@
+CREATE TABLE IF NOT EXISTS space (
+    id TEXT NOT NULL PRIMARY KEY,
+
+    owner_id TEXT NOT NULL,
+
+    title TEXT NOT NULL
+        CHECK (length(title) <= 200),
+
+    is_private INTEGER NOT NULL DEFAULT 0,
+
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    space_deleted_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS space_owner_idx ON space(owner_id, space_deleted_at);
+
+CREATE TABLE IF NOT EXISTS space_member (
+    space_id TEXT NOT NULL REFERENCES space(id),
+    user_id  TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (space_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS space_member_user_idx ON space_member(user_id);
+
 CREATE TABLE IF NOT EXISTS tat_group (
     id TEXT NOT NULL PRIMARY KEY,
 
     owner_id TEXT NOT NULL,
+
+    space_id TEXT REFERENCES space(id),
 
     title TEXT NOT NULL
         CHECK (length(title) <= 200),
@@ -12,6 +40,7 @@ CREATE TABLE IF NOT EXISTS tat_group (
 );
 
 CREATE INDEX IF NOT EXISTS group_owner_idx ON tat_group(owner_id, group_deleted_at);
+CREATE INDEX IF NOT EXISTS group_space_idx ON tat_group(space_id);
 
 -- Enum constraints (stored as TEXT)
 CREATE TABLE IF NOT EXISTS task (
@@ -65,13 +94,81 @@ CREATE INDEX IF NOT EXISTS record_deleted_idx ON record(record_deleted_at);
 CREATE INDEX IF NOT EXISTS record_owner_idx ON record(owner_id, record_deleted_at);
 CREATE INDEX IF NOT EXISTS record_group_idx ON record(group_id);
 
+insertSpace:
+INSERT INTO space(id, owner_id, title, is_private, created_at, updated_at, space_deleted_at)
+VALUES (:id, :owner_id, :title, 0, :created_at, NULL, NULL);
+
+insertPrivateSpace:
+INSERT OR IGNORE INTO space(id, owner_id, title, is_private, created_at, updated_at, space_deleted_at)
+VALUES ('private-' || :owner_id, :owner_id, 'Private', 1, :created_at, NULL, NULL);
+
+selectPrivateSpaceByOwner:
+SELECT id, owner_id, title, is_private, created_at, updated_at, space_deleted_at
+FROM space
+WHERE owner_id = :owner_id AND is_private = 1
+LIMIT 1;
+
+updateSpace:
+UPDATE space
+SET title = :title, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND space_deleted_at IS NULL;
+
+softDeleteSpace:
+UPDATE space
+SET space_deleted_at = :space_deleted_at, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND space_deleted_at IS NULL;
+
+selectSpaceById:
+SELECT id, owner_id, title, is_private, created_at, updated_at, space_deleted_at
+FROM space
+WHERE id = :id
+LIMIT 1;
+
+selectAllActiveSpacesByOwner:
+SELECT id, owner_id, title, is_private, created_at, updated_at, space_deleted_at
+FROM space
+WHERE space_deleted_at IS NULL AND (
+    owner_id = :owner_id
+    OR id IN (SELECT space_id FROM space_member WHERE user_id = :owner_id)
+);
+
+insertSpaceMember:
+INSERT OR IGNORE INTO space_member(space_id, user_id, created_at)
+VALUES (:space_id, :user_id, :created_at);
+
+deleteSpaceMember:
+DELETE FROM space_member WHERE space_id = :space_id AND user_id = :user_id;
+
+selectSpaceMembers:
+SELECT user_id, created_at FROM space_member WHERE space_id = :space_id;
+
+selectSpaceMember:
+SELECT user_id FROM space_member WHERE space_id = :space_id AND user_id = :user_id LIMIT 1;
+
+hasSpaceAccess:
+SELECT COUNT(*) FROM (
+    SELECT id FROM space WHERE id = :space_id AND owner_id = :user_id AND space_deleted_at IS NULL
+    UNION ALL
+    SELECT space_id FROM space_member WHERE space_id = :space_id AND user_id = :user_id
+) LIMIT 1;
+
+selectAccessibleSpaceIds:
+SELECT id FROM space WHERE owner_id = :user_id AND space_deleted_at IS NULL
+UNION ALL
+SELECT space_id FROM space_member WHERE user_id = :user_id;
+
 insertGroup:
-INSERT INTO tat_group(id, owner_id, title, created_at, updated_at, group_deleted_at)
-VALUES (:id, :owner_id, :title, :created_at, NULL, NULL);
+INSERT INTO tat_group(id, owner_id, space_id, title, created_at, updated_at, group_deleted_at)
+VALUES (:id, :owner_id, :space_id, :title, :created_at, NULL, NULL);
 
 updateGroup:
 UPDATE tat_group
 SET title = :title, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND group_deleted_at IS NULL;
+
+updateGroupSpace:
+UPDATE tat_group
+SET space_id = :space_id, updated_at = :updated_at
 WHERE id = :id AND owner_id = :owner_id AND group_deleted_at IS NULL;
 
 softDeleteGroup:
@@ -80,15 +177,24 @@ SET group_deleted_at = :group_deleted_at, updated_at = :updated_at
 WHERE id = :id AND owner_id = :owner_id AND group_deleted_at IS NULL;
 
 selectGroupById:
-SELECT id, owner_id, title, created_at, updated_at, group_deleted_at
+SELECT id, owner_id, space_id, title, created_at, updated_at, group_deleted_at
 FROM tat_group
 WHERE id = :id
 LIMIT 1;
 
 selectAllActiveGroupsByOwner:
-SELECT id, owner_id, title, created_at, updated_at, group_deleted_at
+SELECT id, owner_id, space_id, title, created_at, updated_at, group_deleted_at
 FROM tat_group
-WHERE owner_id = :owner_id AND group_deleted_at IS NULL;
+WHERE group_deleted_at IS NULL AND (
+    owner_id = :owner_id
+    OR space_id IN (SELECT id FROM space WHERE owner_id = :owner_id AND space_deleted_at IS NULL)
+    OR space_id IN (SELECT space_id FROM space_member WHERE user_id = :owner_id)
+);
+
+selectAllActiveGroupsBySpace:
+SELECT id, owner_id, space_id, title, created_at, updated_at, group_deleted_at
+FROM tat_group
+WHERE space_id = :space_id AND group_deleted_at IS NULL;
 
 insertTask:
 INSERT INTO task(
@@ -151,7 +257,7 @@ WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
 
 nullifyTasksGroup:
 UPDATE task SET group_id = NULL, updated_at = :updated_at
-WHERE group_id = :group_id AND owner_id = :owner_id;
+WHERE group_id = :group_id;
 
 softDeleteTask:
 UPDATE task
@@ -181,17 +287,17 @@ WHERE owner_id = :owner_id AND task_deleted_at IS NULL;
 selectActiveTasksByGroup:
 SELECT id, owner_id, group_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
 FROM task
-WHERE group_id = :group_id AND owner_id = :owner_id AND task_deleted_at IS NULL;
+WHERE group_id = :group_id AND task_deleted_at IS NULL;
 
 assignTaskToGroup:
 UPDATE task
 SET group_id = :group_id, updated_at = :updated_at
-WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
+WHERE id = :id AND task_deleted_at IS NULL;
 
 assignRecordToGroup:
 UPDATE record
 SET group_id = :group_id, updated_at = :updated_at
-WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+WHERE id = :id AND record_deleted_at IS NULL;
 
 insertRecord:
 INSERT INTO record(id, owner_id, group_id, title, content, created_at, updated_at, record_deleted_at)
@@ -213,7 +319,7 @@ WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
 
 nullifyRecordsGroup:
 UPDATE record SET group_id = NULL, updated_at = :updated_at
-WHERE group_id = :group_id AND owner_id = :owner_id;
+WHERE group_id = :group_id;
 
 softDeleteRecord:
 UPDATE record
@@ -236,27 +342,36 @@ WHERE owner_id = :owner_id AND record_deleted_at IS NULL;
 selectActiveRecordsByGroup:
 SELECT id, owner_id, group_id, title, content, created_at, updated_at, record_deleted_at
 FROM record
-WHERE group_id = :group_id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+WHERE group_id = :group_id AND record_deleted_at IS NULL;
 
 selectFeedPage:
 SELECT kind, id, created_at FROM (
-    SELECT 'group' AS kind, id, created_at FROM tat_group
-    WHERE owner_id = :owner_id AND group_deleted_at IS NULL
+    SELECT 'group' AS kind, g.id, g.created_at FROM tat_group g
+    WHERE g.group_deleted_at IS NULL AND (
+        g.owner_id = :user_id
+        OR g.space_id IN (SELECT id FROM space WHERE owner_id = :user_id AND space_deleted_at IS NULL)
+        OR g.space_id IN (SELECT space_id FROM space_member WHERE user_id = :user_id)
+    )
     UNION ALL
     SELECT 'task' AS kind, id, created_at FROM task
-    WHERE owner_id = :owner_id AND task_deleted_at IS NULL AND group_id IS NULL
+    WHERE owner_id = :user_id AND task_deleted_at IS NULL AND group_id IS NULL
     UNION ALL
     SELECT 'record' AS kind, id, created_at FROM record
-    WHERE owner_id = :owner_id AND record_deleted_at IS NULL AND group_id IS NULL
+    WHERE owner_id = :user_id AND record_deleted_at IS NULL AND group_id IS NULL
 )
 ORDER BY created_at DESC
 LIMIT :lim OFFSET :off;
 
 countFeedEntries:
 SELECT COUNT(*) FROM (
-    SELECT id FROM tat_group WHERE owner_id = :owner_id AND group_deleted_at IS NULL
+    SELECT g.id FROM tat_group g
+    WHERE g.group_deleted_at IS NULL AND (
+        g.owner_id = :user_id
+        OR g.space_id IN (SELECT id FROM space WHERE owner_id = :user_id AND space_deleted_at IS NULL)
+        OR g.space_id IN (SELECT space_id FROM space_member WHERE user_id = :user_id)
+    )
     UNION ALL
-    SELECT id FROM task WHERE owner_id = :owner_id AND task_deleted_at IS NULL AND group_id IS NULL
+    SELECT id FROM task WHERE owner_id = :user_id AND task_deleted_at IS NULL AND group_id IS NULL
     UNION ALL
-    SELECT id FROM record WHERE owner_id = :owner_id AND record_deleted_at IS NULL AND group_id IS NULL
+    SELECT id FROM record WHERE owner_id = :user_id AND record_deleted_at IS NULL AND group_id IS NULL
 );

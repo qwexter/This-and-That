@@ -1,0 +1,21 @@
+meta {
+  name: Create space
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/spaces
+  body: json
+  auth: none
+}
+
+headers {
+  X-User-Id: {{userId}}
+}
+
+body:json {
+  {
+    "title": "My Space"
+  }
+}

@@ -8,6 +8,7 @@ export default defineConfig({
 			'/tasks': 'http://localhost:8080',
 			'/records': 'http://localhost:8080',
 			'/groups': 'http://localhost:8080',
+			'/spaces': 'http://localhost:8080',
 			'/feed': 'http://localhost:8080'
 		}
 	},
@@ -32,7 +33,7 @@ export default defineConfig({
 				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 				runtimeCaching: [
 					{
-						urlPattern: /\/(tasks|records|groups|feed)/,
+						urlPattern: /\/(tasks|records|groups|spaces|feed)/,
 						handler: 'NetworkFirst',
 						options: {
 							cacheName: 'api-cache',

@@ -3,19 +3,24 @@ package xyz.qwexter.tat.integration
 import io.ktor.client.call.body
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import xyz.qwexter.AuthMode
 import xyz.qwexter.tat.routing.ActiveGroup
 import xyz.qwexter.tat.routing.ActiveRecord
+import xyz.qwexter.tat.routing.ActiveSpace
 import xyz.qwexter.tat.routing.ActiveTask
 import xyz.qwexter.tat.routing.AddGroup
 import xyz.qwexter.tat.routing.AddGroupItem
 import xyz.qwexter.tat.routing.AddGroupItemsRequest
 import xyz.qwexter.tat.routing.AddGroupItemsResponse
 import xyz.qwexter.tat.routing.AddRecord
+import xyz.qwexter.tat.routing.AddSpace
+import xyz.qwexter.tat.routing.AddSpaceMember
 import xyz.qwexter.tat.routing.AddTask
 import xyz.qwexter.tat.routing.ApiTaskPriority
 import xyz.qwexter.tat.routing.ApiTaskStatus
@@ -250,5 +255,76 @@ class GroupItemsRoutingTest {
             setBody("{not valid json}")
         }
         assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    // --- auth / shared-space access ---
+
+    @Test
+    fun `member of shared space can add items to group in that space`() = dbApp(authMode = AuthMode.HEADER) {
+        val spaceId = client.post("spaces") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddSpace(title = "Team"))
+        }.body<ActiveSpace>().id
+
+        client.post("spaces/$spaceId/members") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddSpaceMember(userId = "bob"))
+        }
+
+        val groupId = client.post("groups") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddGroup(title = "Shared Group", spaceId = spaceId))
+        }.body<ActiveGroup>().id
+
+        val resp = client.post("groups/$groupId/items") {
+            header("X-User-Id", "bob")
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            setBody(AddGroupItemsRequest(items = listOf(AddGroupItem.NewTask(name = "Bob Task"))))
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val items = resp.body<AddGroupItemsResponse>().items
+        assertEquals(1, items.size)
+        assertIs<GroupItemResponse.TaskResponse>(items.single()).also {
+            assertEquals("Bob Task", it.name)
+            assertEquals(groupId, it.groupId)
+        }
+    }
+
+    @Test
+    fun `non-member cannot add items to group in another user's private space`() = dbApp(authMode = AuthMode.HEADER) {
+        val groupId = client.post("groups") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddGroup(title = "Alice Private Group"))
+        }.body<ActiveGroup>().id
+
+        val resp = client.post("groups/$groupId/items") {
+            header("X-User-Id", "bob")
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            setBody(AddGroupItemsRequest(items = listOf(AddGroupItem.NewTask(name = "Intruder Task"))))
+        }
+        assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
+    fun `owner can always add items to own groups`() = dbApp(authMode = AuthMode.HEADER) {
+        val groupId = client.post("groups") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddGroup(title = "Alice Group"))
+        }.body<ActiveGroup>().id
+
+        val resp = client.post("groups/$groupId/items") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            accept(ContentType.Application.Json)
+            setBody(AddGroupItemsRequest(items = listOf(AddGroupItem.NewTask(name = "Alice Task"))))
+        }
+        assertEquals(HttpStatusCode.OK, resp.status)
     }
 }

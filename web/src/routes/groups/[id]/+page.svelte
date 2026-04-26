@@ -2,11 +2,12 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
-	import type { Group, Task, Record, AddGroupItem } from '$lib/types';
+	import type { Group, Space, Task, Record, AddGroupItem } from '$lib/types';
 
 	const id = $derived($page.params.id!);
 
 	let group = $state<Group | null>(null);
+	let spaces = $state<Space[]>([]);
 	let tasks = $state<Task[]>([]);
 	let records = $state<Record[]>([]);
 	let unassignedTasks = $state<Task[]>([]);
@@ -16,6 +17,36 @@
 	let editing = $state(false);
 	let editTitle = $state('');
 	let saving = $state(false);
+	let movingSpace = $state(false);
+
+	const spaceMap = $derived(new Map(spaces.map((s) => [s.id, s])));
+	const nonPrivateSpaces = $derived(spaces.filter((s) => !s.isPrivate));
+
+	function currentSpaceName(): string {
+		if (!group?.spaceId) return 'Private';
+		return spaceMap.get(group.spaceId)?.title ?? 'Private';
+	}
+
+	function isCurrentSpacePrivate(): boolean {
+		if (!group?.spaceId) return true;
+		return spaceMap.get(group.spaceId)?.isPrivate ?? true;
+	}
+
+	async function moveToSpace(targetSpaceId: string) {
+		if (!group) return;
+		movingSpace = true;
+		try {
+			if (targetSpaceId === '') {
+				group = await api.updateGroup(id, { clearSpace: true });
+			} else {
+				group = await api.updateGroup(id, { spaceId: targetSpaceId });
+			}
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			movingSpace = false;
+		}
+	}
 
 	// add panel
 	let addMode = $state<'none' | 'newTask' | 'newRecord' | 'existing'>('none');
@@ -36,12 +67,14 @@
 
 	async function load() {
 		try {
-			const [g, allTasks, allRecords] = await Promise.all([
+			const [g, allTasks, allRecords, allSpaces] = await Promise.all([
 				api.getGroup(id),
 				api.getTasks(),
-				api.getRecords()
+				api.getRecords(),
+				api.getSpaces()
 			]);
 			group = g;
+			spaces = allSpaces;
 			editTitle = g.title;
 			tasks = allTasks.filter((t) => t.groupId === id);
 			records = allRecords.filter((r) => r.groupId === id);
@@ -141,9 +174,26 @@
 			<button class="cancel" onclick={() => { editing = false; editTitle = group!.title; }}>Cancel</button>
 		{:else}
 			<h1 class="group-title">{group.title}</h1>
+			<span class="space-badge" class:private={isCurrentSpacePrivate()}>{currentSpaceName()}</span>
 			<button class="edit-btn" onclick={() => { editing = true; }}>Edit</button>
 			<button class="del-btn" onclick={deleteGroup}>Delete group</button>
 		{/if}
+	</div>
+
+	<div class="move-space-row">
+		<label for="move-space-select" class="move-label">Space:</label>
+		<select
+			id="move-space-select"
+			class="move-select"
+			disabled={movingSpace}
+			value={group.spaceId ?? ''}
+			onchange={(e) => moveToSpace((e.target as HTMLSelectElement).value)}
+		>
+			<option value="">Private</option>
+			{#each nonPrivateSpaces as s (s.id)}
+				<option value={s.id}>{s.title}</option>
+			{/each}
+		</select>
 	</div>
 
 	<!-- Add items panel -->
@@ -262,6 +312,44 @@
 		font-size: 1.3rem;
 		font-weight: 700;
 	}
+
+	.space-badge {
+		font-size: 0.7rem;
+		padding: 0.15rem 0.5rem;
+		background: #1e3a5f;
+		color: #60a5fa;
+		border-radius: 999px;
+		white-space: nowrap;
+	}
+
+	.space-badge.private {
+		background: #2a2a4a;
+		color: #888;
+	}
+
+	.move-space-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 1.25rem;
+	}
+
+	.move-label {
+		font-size: 0.8rem;
+		color: #888;
+	}
+
+	.move-select {
+		padding: 0.3rem 0.5rem;
+		background: #16213e;
+		border: 1px solid #2a2a4a;
+		border-radius: 6px;
+		color: inherit;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+
+	.move-select:disabled { opacity: 0.5; cursor: default; }
 
 	.title-input {
 		flex: 1;
