@@ -1,0 +1,25 @@
+meta {
+  name: Rename group
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/groups/:id
+  body: json
+  auth: none
+}
+
+headers {
+  X-User-Id: {{userId}}
+}
+
+params:path {
+  id: some-group-id
+}
+
+body:json {
+  {
+    "title": "Updated title"
+  }
+}

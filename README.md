@@ -3,7 +3,7 @@
 TaT is a solution for small task and record management, like a todo-list with a few extras:
 - [x] todo items with severity and optional deadline
 - [x] plain text records
-- [ ] grouping of tasks and records
+- [x] grouping of tasks and records
 - [ ] ability to share access to a specific group (with equal rights to edit)
 - [ ] PWA application to be able to work offline with cached data
 
@@ -86,12 +86,55 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 | PATCH  | /tasks/{id}  | JSON | Partial update a task |
 | DELETE | /tasks/{id}  | —    | Soft-delete a task    |
 
+`PATCH /tasks/{id}` accepts optional `groupId` (string) to assign task to a group, or `clearGroup: true` to remove it from its group.
+
+### Records
+
+| Method | Path           | Body | Description              |
+|--------|----------------|------|--------------------------|
+| GET    | /records       | —    | List all active records  |
+| GET    | /records/{id}  | —    | Get record by ID         |
+| POST   | /records       | JSON | Create a new record      |
+| PATCH  | /records/{id}  | JSON | Partial update a record  |
+| DELETE | /records/{id}  | —    | Soft-delete a record     |
+
+`PATCH /records/{id}` accepts optional `groupId` / `clearGroup: true` (same as tasks).
+
+### Groups
+
+| Method | Path                   | Body | Description                                                        |
+|--------|------------------------|------|--------------------------------------------------------------------|
+| GET    | /groups                | —    | List all active groups                                             |
+| GET    | /groups/{id}           | —    | Get group by ID                                                    |
+| POST   | /groups                | JSON | Create group (`title`, max 200 chars)                              |
+| PATCH  | /groups/{id}           | JSON | Rename group (`title`)                                             |
+| DELETE | /groups/{id}           | —    | Soft-delete group; items become ungrouped                          |
+| POST   | /groups/{id}/items     | JSON | Add items to group atomically (new or existing tasks/records)      |
+
+`POST /groups/{id}/items` accepts `{ "items": [...] }` where each entry has a `kind` discriminator:
+- `"newTask"` — creates a task in the group (`name` required, `description`/`priority`/`deadline` optional)
+- `"newRecord"` — creates a record in the group (`title` required, `content` optional)
+- `"existingTask"` — assigns an ungrouped task by `id`
+- `"existingRecord"` — assigns an ungrouped record by `id`
+
+All items are written in a single transaction — all succeed or all fail. Returns 400 if any item is not found or already belongs to a different group.
+
+### Feed
+
+| Method | Path   | Body | Description                              |
+|--------|--------|------|------------------------------------------|
+| GET    | /feed  | —    | Unified paginated feed (groups + items)  |
+
+Query params: `limit` (default 20, max 100), `offset` (default 0).
+
+Feed response mixes groups (with children inline) and solo tasks/records, sorted by `created_at` desc. Each entry has a `kind` discriminator (`"group"`, `"task"`, `"record"`).
+
 **Error responses:**
 
 | Status | When                                        |
 |--------|---------------------------------------------|
 | 400    | Malformed JSON, missing required fields, blank name |
-| 404    | Task not found                              |
+| 404    | Resource not found                          |
 | 500    | Unexpected server error                     |
 
 See `bruno/` for a [Bruno](https://www.usebruno.com/) collection with ready-to-run requests.
@@ -141,5 +184,15 @@ Manifest name: **This and That** / short name **TaT**. Icons expected at `static
 
 SQLite database file `tat.db` is created in the working directory on first run.
 Schema is managed by SQLDelight — `.sq` files live in `src/commonMain/sqldelight/`.
+Migrations live in `src/commonMain/sqldelight/migrations/` as `<version>.sqm` files.
+
+Schema version is stored in SQLite's `PRAGMA user_version`. On startup the server automatically runs any pending migrations — no manual steps needed.
 
 Timestamps (`created_at`, `updated_at`, `deleted_at`) are stored as Unix epoch milliseconds (UTC). `deadline` is stored as epoch milliseconds (UTC) and round-tripped as a local datetime — no server-side timezone conversion occurs.
+
+### Schema versions
+
+| Version | Change |
+|---------|--------|
+| 1       | Initial schema: `task`, `record` tables |
+| 2       | Added `tat_group` table; `group_id` FK on `task` and `record` |

@@ -10,8 +10,10 @@
 	<header>
 		<a href="/" class="brand">TaT</a>
 		<nav>
-			<a href="/">Tasks</a>
+			<a href="/">Feed</a>
+			<a href="/tasks">Tasks</a>
 			<a href="/records">Records</a>
+			<a href="/groups">Groups</a>
 		</nav>
 	</header>
 	<main>

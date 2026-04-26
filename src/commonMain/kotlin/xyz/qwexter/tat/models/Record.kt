@@ -9,6 +9,7 @@ value class RecordTitle(val title: String)
 data class Record(
     val id: RecordId,
     val ownerId: String,
+    val groupId: GroupId?,
     val title: RecordTitle,
     val content: String?,
     val createdAt: Instant,

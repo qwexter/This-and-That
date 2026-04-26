@@ -1,0 +1,16 @@
+CREATE TABLE IF NOT EXISTS tat_group (
+    id TEXT NOT NULL PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    title TEXT NOT NULL CHECK (length(title) <= 200),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    group_deleted_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS group_owner_idx ON tat_group(owner_id, group_deleted_at);
+
+ALTER TABLE task ADD COLUMN group_id TEXT REFERENCES tat_group(id);
+CREATE INDEX IF NOT EXISTS task_group_idx ON task(group_id);
+
+ALTER TABLE record ADD COLUMN group_id TEXT REFERENCES tat_group(id);
+CREATE INDEX IF NOT EXISTS record_group_idx ON record(group_id);

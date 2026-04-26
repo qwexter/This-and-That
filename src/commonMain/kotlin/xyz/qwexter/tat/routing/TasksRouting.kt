@@ -14,9 +14,11 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import xyz.qwexter.AuthMode
 import xyz.qwexter.addCORSHeaders
+import xyz.qwexter.tat.models.GroupId
 import xyz.qwexter.tat.models.TaskId
 import xyz.qwexter.tat.models.TaskPriority
 import xyz.qwexter.tat.models.TaskStatus
+import xyz.qwexter.tat.repository.TaskUpdateParams
 import xyz.qwexter.tat.repository.TasksRepository
 
 fun Application.tasksRouting(
@@ -76,11 +78,15 @@ private suspend fun ApplicationCall.patchTask(repo: TasksRepository, ownerId: St
     val task = repo.updateTask(
         ownerId = ownerId,
         taskId = taskId,
-        name = body.name?.trim(),
-        description = body.description,
-        status = body.status?.toDomain(),
-        priority = body.priority?.toDomain(),
-        deadline = body.deadline,
+        params = TaskUpdateParams(
+            name = body.name?.trim(),
+            description = body.description,
+            status = body.status?.toDomain(),
+            priority = body.priority?.toDomain(),
+            deadline = body.deadline,
+            groupId = body.groupId?.let { GroupId(it) },
+            clearGroup = body.clearGroup,
+        ),
     )
     if (task == null) {
         respond(HttpStatusCode.NotFound)
@@ -109,6 +115,7 @@ private suspend fun ApplicationCall.postTask(repo: TasksRepository, ownerId: Str
         status = addTask.status?.toDomain() ?: TaskStatus.Todo,
         priority = addTask.priority?.toDomain() ?: TaskPriority.Low,
         deadline = addTask.deadline,
+        groupId = addTask.groupId?.let { GroupId(it) },
     )
     respond(HttpStatusCode.Created, task.toApi())
 }

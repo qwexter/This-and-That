@@ -7,10 +7,12 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import xyz.qwexter.db
+import xyz.qwexter.tat.models.GroupId
 import xyz.qwexter.tat.models.Task
 import xyz.qwexter.tat.models.TaskId
 import xyz.qwexter.tat.models.TaskPriority
 import xyz.qwexter.tat.models.TaskStatus
+import xyz.qwexter.tat.repository.TaskUpdateParams
 import xyz.qwexter.tat.repository.TasksRepository
 import xyz.qwexter.tat.repository.toDb
 
@@ -28,6 +30,7 @@ val unimplementedTasksRepository: Application.() -> TasksRepository
                 status: TaskStatus,
                 priority: TaskPriority,
                 deadline: LocalDateTime?,
+                groupId: GroupId?,
             ): Task {
                 TODO("Not yet implemented")
             }
@@ -39,11 +42,7 @@ val unimplementedTasksRepository: Application.() -> TasksRepository
             override suspend fun updateTask(
                 ownerId: String,
                 taskId: TaskId,
-                name: String?,
-                description: String?,
-                status: TaskStatus?,
-                priority: TaskPriority?,
-                deadline: LocalDateTime?,
+                params: TaskUpdateParams,
             ): Task? {
                 TODO("Not yet implemented")
             }
@@ -69,6 +68,7 @@ fun createTasksRepositoryDb(
                     db.tatDatabaseQueries.insertTask(
                         id = it.id.id,
                         owner_id = it.ownerId,
+                        group_id = it.groupId?.id,
                         name = it.name.name,
                         description = it.description,
                         priority = it.priority.toDb(),

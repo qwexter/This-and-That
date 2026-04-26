@@ -14,6 +14,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import xyz.qwexter.AuthMode
 import xyz.qwexter.addCORSHeaders
+import xyz.qwexter.tat.models.GroupId
 import xyz.qwexter.tat.models.RecordId
 import xyz.qwexter.tat.repository.RecordsRepository
 
@@ -84,6 +85,7 @@ private suspend fun ApplicationCall.postRecord(repo: RecordsRepository, ownerId:
         ownerId = ownerId,
         title = body.title.trim(),
         content = body.content,
+        groupId = body.groupId?.let { GroupId(it) },
     )
     respond(HttpStatusCode.Created, record.toApi())
 }
@@ -108,6 +110,8 @@ private suspend fun ApplicationCall.patchRecord(repo: RecordsRepository, ownerId
         recordId = recordId,
         title = body.title?.trim(),
         content = body.content,
+        groupId = body.groupId?.let { GroupId(it) },
+        clearGroup = body.clearGroup,
     )
     if (record == null) {
         respond(HttpStatusCode.NotFound)

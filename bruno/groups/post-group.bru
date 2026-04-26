@@ -1,11 +1,11 @@
 meta {
-  name: Create record
+  name: Create group
   type: http
   seq: 3
 }
 
 post {
-  url: {{baseUrl}}/records
+  url: {{baseUrl}}/groups
   body: json
   auth: none
 }
@@ -16,8 +16,6 @@ headers {
 
 body:json {
   {
-    "title": "Shopping list",
-    "content": null,
-    "groupId": null
+    "title": "My group"
   }
 }
