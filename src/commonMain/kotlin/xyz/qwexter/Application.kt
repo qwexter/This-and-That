@@ -3,6 +3,8 @@ package xyz.qwexter
 import io.ktor.server.application.Application
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import xyz.qwexter.tat.repository.FeedRepository
+import xyz.qwexter.tat.repository.GroupsRepository
 import xyz.qwexter.tat.repository.RecordsRepository
 import xyz.qwexter.tat.repository.TasksRepository
 
@@ -20,6 +22,8 @@ fun Application.module(config: AppConfig = loadConfig()) {
     configureRouting(
         tasksRepository = TasksRepository.create(db),
         recordsRepository = RecordsRepository.create(db),
+        groupsRepository = GroupsRepository.create(db),
+        feedRepository = FeedRepository.create(db),
         authMode = config.authMode,
         corsEnabled = config.staticPath == null,
     )

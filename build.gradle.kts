@@ -101,6 +101,8 @@ sqldelight {
     databases {
         register("TatDatabase") {
             packageName.set("xyz.qwexter.db")
+            version = 2
+            migrationOutputDirectory = file("src/commonMain/sqldelight/migrations")
         }
         linkSqlite = false
     }

@@ -16,31 +16,63 @@ SvelteKit 2 + Svelte 5 static SPA, PWA-ready. Frontend for the [TaT](../README.m
 ```
 src/
 ├── lib/
-│   ├── api.ts       — fetch wrapper, all /tasks endpoints
-│   └── types.ts     — Task, AddTask, UpdateTask interfaces
+│   ├── api.ts       — fetch wrapper, all API endpoints
+│   └── types.ts     — Task, Record, Group, FeedPage interfaces
 └── routes/
-    ├── +layout.svelte        — dark shell, "TaT" header
-    ├── +page.svelte          — task list (todo / done split, add form)
-    └── tasks/[id]/
-        └── +page.svelte      — task detail editor (PATCH / DELETE)
+    ├── +layout.svelte              — dark shell, "TaT" header, nav
+    ├── +page.svelte                — unified feed (groups + solo items)
+    ├── tasks/
+    │   ├── +page.svelte            — task list (todo / done split, add form)
+    │   └── [id]/+page.svelte       — task detail editor (PATCH / DELETE)
+    ├── records/
+    │   ├── +page.svelte            — record list with content preview
+    │   └── [id]/+page.svelte       — record detail editor (PATCH / DELETE)
+    └── groups/
+        ├── +page.svelte            — group list (create / delete)
+        └── [id]/+page.svelte       — group detail (rename, view + remove items)
 ```
 
 ## State
 
 Svelte 5 runes only — no stores, no external state lib.
-- `$state` per-component, `$derived` for todo/done filters, `$effect` for load on mount.
+- `$state` per-component, `$derived` for filters, `$effect` for load on mount.
+
+## Navigation
+
+| Route | Description |
+|-------|-------------|
+| `/` | Unified feed — groups with children + solo tasks/records, sorted newest first |
+| `/tasks` | All tasks, split todo/done |
+| `/tasks/{id}` | Task detail + edit + group assignment |
+| `/records` | All records |
+| `/records/{id}` | Record detail + edit + group assignment |
+| `/groups` | All groups |
+| `/groups/{id}` | Group detail — rename, list members, remove from group |
 
 ## API
 
 Base URL: `VITE_API_URL` env var (default: same origin).
 
-| Method | Path         | Description       |
-|--------|--------------|-------------------|
-| GET    | /tasks       | List tasks        |
-| GET    | /tasks/{id}  | Get task          |
-| POST   | /tasks       | Create task       |
-| PATCH  | /tasks/{id}  | Partial update    |
-| DELETE | /tasks/{id}  | Soft-delete       |
+| Method | Path           | Description                         |
+|--------|----------------|-------------------------------------|
+| GET    | /tasks         | List tasks                          |
+| GET    | /tasks/{id}    | Get task                            |
+| POST   | /tasks         | Create task                         |
+| PATCH  | /tasks/{id}    | Partial update (incl. groupId)      |
+| DELETE | /tasks/{id}    | Soft-delete                         |
+| GET    | /records       | List records                        |
+| GET    | /records/{id}  | Get record                          |
+| POST   | /records       | Create record                       |
+| PATCH  | /records/{id}  | Partial update (incl. groupId)      |
+| DELETE | /records/{id}  | Soft-delete                         |
+| GET    | /groups        | List groups                         |
+| GET    | /groups/{id}   | Get group                           |
+| POST   | /groups        | Create group                        |
+| PATCH  | /groups/{id}   | Rename group                        |
+| DELETE | /groups/{id}   | Soft-delete (items become ungrouped)|
+| GET    | /feed          | Unified feed (limit, offset params) |
+
+Vite dev server proxies `/tasks`, `/records`, `/groups`, `/feed` → `localhost:8080`.
 
 ## Auth
 
@@ -59,12 +91,12 @@ See `docs/launch.md` for full deployment instructions.
 
 - Manifest: name "This and That" / short "TaT", theme `#1a1a2e`, standalone display.
 - Icons: `static/icons/icon-192.png`, `static/icons/icon-512.png`.
-- Service worker: `NetworkFirst` for `/tasks/*` (5 s timeout → cache fallback), `autoUpdate` on new version.
+- Service worker: `NetworkFirst` for `/tasks`, `/records`, `/groups`, `/feed` (5 s timeout → cache fallback), `autoUpdate` on new version.
 - Offline-first roadmap: `docs/offline-first-pwa.md`.
 
 ## Dev
 
-Backend must run on `localhost:8080` with `AUTH_MODE=none`. Vite dev server proxies `/tasks` there.
+Backend must run on `localhost:8080` with `AUTH_MODE=none`. Vite dev server proxies API routes there.
 
 ```sh
 npm install

@@ -1,0 +1,46 @@
+meta {
+  name: Add items to group
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/groups/:groupId/items
+  body: json
+  auth: none
+}
+
+headers {
+  X-User-Id: {{userId}}
+}
+
+params:path {
+  groupId: some-group-id
+}
+
+body:json {
+  {
+    "items": [
+      {
+        "kind": "newTask",
+        "name": "New task in group",
+        "description": null,
+        "priority": "Low",
+        "deadline": null
+      },
+      {
+        "kind": "newRecord",
+        "title": "New record in group",
+        "content": null
+      },
+      {
+        "kind": "existingTask",
+        "id": "some-task-id"
+      },
+      {
+        "kind": "existingRecord",
+        "id": "some-record-id"
+      }
+    ]
+  }
+}

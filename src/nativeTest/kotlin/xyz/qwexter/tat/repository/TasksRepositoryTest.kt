@@ -86,6 +86,7 @@ class TasksRepositoryTest {
             createdAt = Clock.System.now(),
             updatedAt = null,
             deletedAt = null,
+            groupId = null,
         )
         val deleted = active.copy(
             id = TaskId("b"),

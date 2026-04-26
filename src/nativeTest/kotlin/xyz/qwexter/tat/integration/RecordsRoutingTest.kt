@@ -36,6 +36,7 @@ class RecordsRoutingTest {
             createdAt = now,
             updatedAt = null,
             deletedAt = null,
+            groupId = null,
         ),
         Record(
             id = RecordId("record-2"),
@@ -45,6 +46,7 @@ class RecordsRoutingTest {
             createdAt = now,
             updatedAt = null,
             deletedAt = null,
+            groupId = null,
         ),
         Record(
             id = RecordId("record-3"),
@@ -54,6 +56,7 @@ class RecordsRoutingTest {
             createdAt = now,
             updatedAt = now,
             deletedAt = now,
+            groupId = null,
         ),
     )
 

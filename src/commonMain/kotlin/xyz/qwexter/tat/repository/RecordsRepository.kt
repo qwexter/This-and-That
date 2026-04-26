@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import xyz.qwexter.db.TatDatabase
+import xyz.qwexter.tat.models.GroupId
 import xyz.qwexter.tat.models.Record
 import xyz.qwexter.tat.models.RecordId
 import xyz.qwexter.tat.models.RecordTitle
@@ -18,6 +19,7 @@ interface RecordsRepository {
         ownerId: String,
         title: String,
         content: String?,
+        groupId: GroupId? = null,
     ): Record
 
     suspend fun getRecordById(ownerId: String, recordId: RecordId): Record?
@@ -27,6 +29,8 @@ interface RecordsRepository {
         recordId: RecordId,
         title: String? = null,
         content: String? = null,
+        groupId: GroupId? = null,
+        clearGroup: Boolean = false,
     ): Record?
 
     suspend fun deleteRecord(ownerId: String, recordId: RecordId): Boolean
@@ -47,24 +51,15 @@ private class DbRecordsRepository(
 ) : RecordsRepository {
 
     override suspend fun allActiveRecords(ownerId: String): List<Record> = withContext(dbDispatcher) {
-        db.tatDatabaseQueries.selectAllActiveRecordsByOwner(ownerId).executeAsList().map { row ->
-            recordFromDb(
-                row.id,
-                row.owner_id,
-                row.title,
-                row.content,
-                row.created_at,
-                row.updated_at,
-                row.record_deleted_at,
-            )
-        }
+        db.tatDatabaseQueries.selectAllActiveRecordsByOwner(ownerId).executeAsList().map { it.toModel() }
     }
 
-    override suspend fun createRecord(ownerId: String, title: String, content: String?): Record =
+    override suspend fun createRecord(ownerId: String, title: String, content: String?, groupId: GroupId?): Record =
         withContext(dbDispatcher) {
             val record = Record(
                 id = RecordId(Uuid.random().toString()),
                 ownerId = ownerId,
+                groupId = groupId,
                 title = RecordTitle(title),
                 content = content,
                 createdAt = Clock.System.now(),
@@ -74,6 +69,7 @@ private class DbRecordsRepository(
             db.tatDatabaseQueries.insertRecord(
                 id = record.id.id,
                 owner_id = ownerId,
+                group_id = groupId?.id,
                 title = record.title.title,
                 content = record.content,
                 created_at = record.createdAt.toEpochMilliseconds(),
@@ -85,41 +81,35 @@ private class DbRecordsRepository(
     override suspend fun getRecordById(ownerId: String, recordId: RecordId): Record? = withContext(dbDispatcher) {
         val dbItem = db.tatDatabaseQueries.selectRecordById(recordId.id).executeAsOneOrNull() ?: return@withContext null
         if (dbItem.owner_id != ownerId) return@withContext null
-        recordFromDb(
-            dbItem.id,
-            dbItem.owner_id,
-            dbItem.title,
-            dbItem.content,
-            dbItem.created_at,
-            dbItem.updated_at,
-            dbItem.record_deleted_at,
-        )
+        dbItem.toModel()
     }
 
-    override suspend fun updateRecord(ownerId: String, recordId: RecordId, title: String?, content: String?): Record? =
-        withContext(dbDispatcher) {
-            val current = db.tatDatabaseQueries.selectRecordById(recordId.id).executeAsOneOrNull()
-                ?: return@withContext null
-            if (current.owner_id != ownerId) return@withContext null
-            db.tatDatabaseQueries.updateRecord(
-                title = title ?: current.title,
-                content = content ?: current.content,
-                updated_at = Clock.System.now().toEpochMilliseconds(),
-                id = recordId.id,
-                owner_id = ownerId,
-            )
-            db.tatDatabaseQueries.selectRecordById(recordId.id).executeAsOneOrNull()?.let { row ->
-                recordFromDb(
-                    row.id,
-                    row.owner_id,
-                    row.title,
-                    row.content,
-                    row.created_at,
-                    row.updated_at,
-                    row.record_deleted_at,
-                )
-            }
+    override suspend fun updateRecord(
+        ownerId: String,
+        recordId: RecordId,
+        title: String?,
+        content: String?,
+        groupId: GroupId?,
+        clearGroup: Boolean,
+    ): Record? = withContext(dbDispatcher) {
+        val current = db.tatDatabaseQueries.selectRecordById(recordId.id).executeAsOneOrNull()
+            ?: return@withContext null
+        if (current.owner_id != ownerId) return@withContext null
+        val resolvedGroupId = when {
+            clearGroup -> null
+            groupId != null -> groupId.id
+            else -> current.group_id
         }
+        db.tatDatabaseQueries.updateRecord(
+            title = title ?: current.title,
+            content = content ?: current.content,
+            group_id = resolvedGroupId,
+            updated_at = Clock.System.now().toEpochMilliseconds(),
+            id = recordId.id,
+            owner_id = ownerId,
+        )
+        db.tatDatabaseQueries.selectRecordById(recordId.id).executeAsOneOrNull()?.toModel()
+    }
 
     override suspend fun deleteRecord(ownerId: String, recordId: RecordId): Boolean = withContext(dbDispatcher) {
         val existing = db.tatDatabaseQueries.selectRecordById(recordId.id).executeAsOneOrNull()
@@ -137,22 +127,15 @@ private class DbRecordsRepository(
     }
 }
 
-private fun recordFromDb(
-    id: String,
-    ownerId: String,
-    title: String,
-    content: String?,
-    createdAt: Long,
-    updatedAt: Long?,
-    deletedAt: Long?,
-): Record = Record(
+private fun xyz.qwexter.db.Record.toModel() = Record(
     id = RecordId(id),
-    ownerId = ownerId,
+    ownerId = owner_id,
+    groupId = group_id?.let { GroupId(it) },
     title = RecordTitle(title),
     content = content,
-    createdAt = Instant.fromEpochMilliseconds(createdAt),
-    updatedAt = updatedAt?.let { Instant.fromEpochMilliseconds(it) },
-    deletedAt = deletedAt?.let { Instant.fromEpochMilliseconds(it) },
+    createdAt = Instant.fromEpochMilliseconds(created_at),
+    updatedAt = updated_at?.let { Instant.fromEpochMilliseconds(it) },
+    deletedAt = record_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
 )
 
 private class InMemoryRecords(initial: List<Record>) : RecordsRepository {
@@ -162,10 +145,11 @@ private class InMemoryRecords(initial: List<Record>) : RecordsRepository {
     override suspend fun allActiveRecords(ownerId: String): List<Record> =
         all.filter { it.ownerId == ownerId && it.deletedAt == null }.toList()
 
-    override suspend fun createRecord(ownerId: String, title: String, content: String?): Record {
+    override suspend fun createRecord(ownerId: String, title: String, content: String?, groupId: GroupId?): Record {
         val record = Record(
             id = RecordId(Uuid.random().toString()),
             ownerId = ownerId,
+            groupId = groupId,
             title = RecordTitle(title),
             content = content,
             createdAt = Clock.System.now(),
@@ -179,13 +163,26 @@ private class InMemoryRecords(initial: List<Record>) : RecordsRepository {
     override suspend fun getRecordById(ownerId: String, recordId: RecordId): Record? =
         all.find { it.id == recordId && it.ownerId == ownerId }
 
-    override suspend fun updateRecord(ownerId: String, recordId: RecordId, title: String?, content: String?): Record? {
+    override suspend fun updateRecord(
+        ownerId: String,
+        recordId: RecordId,
+        title: String?,
+        content: String?,
+        groupId: GroupId?,
+        clearGroup: Boolean,
+    ): Record? {
         val idx = all.indexOfFirst { it.id == recordId && it.ownerId == ownerId && it.deletedAt == null }
         if (idx == -1) return null
         val current = all[idx]
+        val resolvedGroupId = when {
+            clearGroup -> null
+            groupId != null -> groupId
+            else -> current.groupId
+        }
         val updated = current.copy(
             title = if (title != null) RecordTitle(title) else current.title,
             content = content ?: current.content,
+            groupId = resolvedGroupId,
             updatedAt = Clock.System.now(),
         )
         all[idx] = updated

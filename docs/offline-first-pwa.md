@@ -4,7 +4,7 @@ Decision record for mobile offline support in the TaT web app.
 
 ## Problem
 
-Current service worker uses `NetworkFirst` with 5 s timeout for `/tasks`. This means:
+Current service worker uses `NetworkFirst` with 5 s timeout for `/tasks`, `/records`, `/groups`, and `/feed`. This means:
 - Read works offline only if previously cached
 - All writes (POST/PATCH/DELETE) fail silently when offline
 - No indication to user that data is unsynced
@@ -94,7 +94,7 @@ IndexedDB  ←→  sync layer  ←→  server SQLite
 
 ### Service worker change
 
-Replace `NetworkFirst` with `CacheFirst` for `/tasks` reads.
+Replace `NetworkFirst` with `CacheFirst` for `/tasks`, `/records`, `/groups`, and `/feed` reads.
 Network fetch happens in background to keep cache fresh, not blocking UI.
 
 ### Dependencies

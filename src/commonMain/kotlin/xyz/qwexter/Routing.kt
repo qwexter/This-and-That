@@ -9,14 +9,20 @@ import io.ktor.server.resources.Resources
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.options
 import io.ktor.server.routing.routing
+import xyz.qwexter.tat.repository.FeedRepository
+import xyz.qwexter.tat.repository.GroupsRepository
 import xyz.qwexter.tat.repository.RecordsRepository
 import xyz.qwexter.tat.repository.TasksRepository
+import xyz.qwexter.tat.routing.feedRouting
+import xyz.qwexter.tat.routing.groupsRouting
 import xyz.qwexter.tat.routing.recordsRouting
 import xyz.qwexter.tat.routing.tasksRouting
 
 fun Application.configureRouting(
     tasksRepository: TasksRepository,
     recordsRepository: RecordsRepository,
+    groupsRepository: GroupsRepository,
+    feedRepository: FeedRepository,
     authMode: AuthMode = AuthMode.NONE,
     corsEnabled: Boolean = false,
 ) {
@@ -35,8 +41,14 @@ fun Application.configureRouting(
             options("/tasks/{...}") { call.respondCORSPreflight() }
             options("/records") { call.respondCORSPreflight() }
             options("/records/{...}") { call.respondCORSPreflight() }
+            options("/groups") { call.respondCORSPreflight() }
+            options("/groups/{...}") { call.respondCORSPreflight() }
+            options("/groups/{groupId}/items") { call.respondCORSPreflight() }
+            options("/feed") { call.respondCORSPreflight() }
         }
     }
     tasksRouting(tasksRepository = tasksRepository, authMode = authMode, corsEnabled = corsEnabled)
     recordsRouting(recordsRepository = recordsRepository, authMode = authMode, corsEnabled = corsEnabled)
+    groupsRouting(groupsRepository = groupsRepository, authMode = authMode, corsEnabled = corsEnabled)
+    feedRouting(feedRepository = feedRepository, authMode = authMode, corsEnabled = corsEnabled)
 }

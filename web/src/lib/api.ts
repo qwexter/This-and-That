@@ -1,4 +1,17 @@
-import type { AddTask, AddRecord, Record, Task, UpdateTask, UpdateRecord } from './types';
+import type {
+	AddGroup,
+	AddGroupItemsRequest,
+	AddGroupItemsResponse,
+	AddRecord,
+	AddTask,
+	FeedPage,
+	Group,
+	Record,
+	Task,
+	UpdateGroup,
+	UpdateRecord,
+	UpdateTask
+} from './types';
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
@@ -27,5 +40,23 @@ export const api = {
 		request<Record>('/records', { method: 'POST', body: JSON.stringify(body) }),
 	updateRecord: (id: string, body: UpdateRecord) =>
 		request<Record>(`/records/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-	deleteRecord: (id: string) => request<void>(`/records/${id}`, { method: 'DELETE' })
+	deleteRecord: (id: string) => request<void>(`/records/${id}`, { method: 'DELETE' }),
+
+	getGroups: () => request<Group[]>('/groups'),
+	getGroup: (id: string) => request<Group>(`/groups/${id}`),
+	createGroup: (body: AddGroup) =>
+		request<Group>('/groups', { method: 'POST', body: JSON.stringify(body) }),
+	updateGroup: (id: string, body: UpdateGroup) =>
+		request<Group>(`/groups/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+	deleteGroup: (id: string) => request<void>(`/groups/${id}`, { method: 'DELETE' }),
+	addGroupItems: (id: string, body: AddGroupItemsRequest) =>
+		request<AddGroupItemsResponse>(`/groups/${id}/items`, { method: 'POST', body: JSON.stringify(body) }),
+
+	getFeed: (params?: { limit?: number; offset?: number }) => {
+		const q = new URLSearchParams();
+		if (params?.limit != null) q.set('limit', String(params.limit));
+		if (params?.offset != null) q.set('offset', String(params.offset));
+		const qs = q.toString();
+		return request<FeedPage>(`/feed${qs ? '?' + qs : ''}`);
+	}
 };

@@ -10,6 +10,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import xyz.qwexter.db.TatDatabase
+import xyz.qwexter.tat.models.GroupId
 import xyz.qwexter.tat.models.Task
 import xyz.qwexter.tat.models.TaskId
 import xyz.qwexter.tat.models.TaskName
@@ -41,6 +42,16 @@ internal fun TaskPriority.toDb(): String = when (this) {
     TaskPriority.High -> "High"
 }
 
+data class TaskUpdateParams(
+    val name: String? = null,
+    val description: String? = null,
+    val status: TaskStatus? = null,
+    val priority: TaskPriority? = null,
+    val deadline: LocalDateTime? = null,
+    val groupId: GroupId? = null,
+    val clearGroup: Boolean = false,
+)
+
 interface TasksRepository {
     suspend fun allActiveTasks(ownerId: String): List<Task>
 
@@ -51,19 +62,12 @@ interface TasksRepository {
         status: TaskStatus = TaskStatus.Todo,
         priority: TaskPriority = TaskPriority.Low,
         deadline: LocalDateTime?,
+        groupId: GroupId? = null,
     ): Task
 
     suspend fun getTaskById(ownerId: String, taskId: TaskId): Task?
 
-    suspend fun updateTask(
-        ownerId: String,
-        taskId: TaskId,
-        name: String? = null,
-        description: String? = null,
-        status: TaskStatus? = null,
-        priority: TaskPriority? = null,
-        deadline: LocalDateTime? = null,
-    ): Task?
+    suspend fun updateTask(ownerId: String, taskId: TaskId, params: TaskUpdateParams): Task?
 
     suspend fun deleteTask(ownerId: String, taskId: TaskId): Boolean
 
@@ -86,20 +90,7 @@ private class DbTaskRepository(
 ) : TasksRepository {
 
     override suspend fun allActiveTasks(ownerId: String): List<Task> = withContext(dbDispatcher) {
-        db.tatDatabaseQueries.selectAllActiveByOwner(ownerId).executeAsList().map { dbTask ->
-            Task(
-                id = TaskId(dbTask.id),
-                name = TaskName(dbTask.name),
-                description = dbTask.description,
-                status = dbTask.status.toTaskStatus(),
-                priority = dbTask.priority.toTaskPriority(),
-                deadline = dbTask.deadline?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC) },
-                createdAt = Instant.fromEpochMilliseconds(dbTask.created_at),
-                updatedAt = dbTask.updated_at?.let { Instant.fromEpochMilliseconds(it) },
-                deletedAt = dbTask.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
-                ownerId = dbTask.owner_id,
-            )
-        }
+        db.tatDatabaseQueries.selectAllActiveByOwner(ownerId).executeAsList().map { it.toModel() }
     }
 
     override suspend fun createTask(
@@ -109,10 +100,12 @@ private class DbTaskRepository(
         status: TaskStatus,
         priority: TaskPriority,
         deadline: LocalDateTime?,
+        groupId: GroupId?,
     ): Task = withContext(dbDispatcher) {
         val newTask = Task(
             id = TaskId(Uuid.random().toString()),
             name = TaskName(name),
+            groupId = groupId,
             description = description,
             status = status,
             priority = priority,
@@ -125,6 +118,7 @@ private class DbTaskRepository(
         db.tatDatabaseQueries.insertTask(
             id = newTask.id.id,
             owner_id = ownerId,
+            group_id = groupId?.id,
             name = newTask.name.name,
             description = newTask.description,
             priority = newTask.priority.toDb(),
@@ -139,57 +133,32 @@ private class DbTaskRepository(
     override suspend fun getTaskById(ownerId: String, taskId: TaskId): Task? = withContext(dbDispatcher) {
         val dbItem = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull() ?: return@withContext null
         if (dbItem.owner_id != ownerId) return@withContext null
-        Task(
-            id = TaskId(dbItem.id),
-            name = TaskName(dbItem.name),
-            description = dbItem.description,
-            status = dbItem.status.toTaskStatus(),
-            priority = dbItem.priority.toTaskPriority(),
-            deadline = dbItem.deadline?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC) },
-            createdAt = Instant.fromEpochMilliseconds(dbItem.created_at),
-            updatedAt = dbItem.updated_at?.let { Instant.fromEpochMilliseconds(it) },
-            deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
-            ownerId = ownerId,
-        )
+        dbItem.toModel()
     }
 
-    override suspend fun updateTask(
-        ownerId: String,
-        taskId: TaskId,
-        name: String?,
-        description: String?,
-        status: TaskStatus?,
-        priority: TaskPriority?,
-        deadline: LocalDateTime?,
-    ): Task? = withContext(dbDispatcher) {
-        val current = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull() ?: return@withContext null
-        if (current.owner_id != ownerId) return@withContext null
-        val updatedAt = Clock.System.now().toEpochMilliseconds()
-        db.tatDatabaseQueries.updateTask(
-            name = name ?: current.name,
-            description = description ?: current.description,
-            status = status?.toDb() ?: current.status,
-            priority = priority?.toDb() ?: current.priority,
-            deadline = deadline?.toInstant(TimeZone.UTC)?.toEpochMilliseconds() ?: current.deadline,
-            updated_at = updatedAt,
-            id = taskId.id,
-            owner_id = ownerId,
-        )
-        db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()?.let { dbItem ->
-            Task(
-                id = TaskId(dbItem.id),
-                name = TaskName(dbItem.name),
-                description = dbItem.description,
-                status = dbItem.status.toTaskStatus(),
-                priority = dbItem.priority.toTaskPriority(),
-                deadline = dbItem.deadline?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC) },
-                createdAt = Instant.fromEpochMilliseconds(dbItem.created_at),
-                updatedAt = dbItem.updated_at?.let { Instant.fromEpochMilliseconds(it) },
-                deletedAt = dbItem.task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
-                ownerId = ownerId,
+    override suspend fun updateTask(ownerId: String, taskId: TaskId, params: TaskUpdateParams): Task? =
+        withContext(dbDispatcher) {
+            val current = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()
+                ?: return@withContext null
+            if (current.owner_id != ownerId) return@withContext null
+            val resolvedGroupId = when {
+                params.clearGroup -> null
+                params.groupId != null -> params.groupId.id
+                else -> current.group_id
+            }
+            db.tatDatabaseQueries.updateTask(
+                name = params.name ?: current.name,
+                description = params.description ?: current.description,
+                status = params.status?.toDb() ?: current.status,
+                priority = params.priority?.toDb() ?: current.priority,
+                deadline = params.deadline?.toInstant(TimeZone.UTC)?.toEpochMilliseconds() ?: current.deadline,
+                group_id = resolvedGroupId,
+                updated_at = Clock.System.now().toEpochMilliseconds(),
+                id = taskId.id,
+                owner_id = ownerId,
             )
+            db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()?.toModel()
         }
-    }
 
     override suspend fun deleteTask(ownerId: String, taskId: TaskId): Boolean = withContext(dbDispatcher) {
         val existing = db.tatDatabaseQueries.selectTaskById(taskId.id).executeAsOneOrNull()
@@ -207,6 +176,20 @@ private class DbTaskRepository(
     }
 }
 
+private fun xyz.qwexter.db.Task.toModel() = Task(
+    id = TaskId(id),
+    ownerId = owner_id,
+    groupId = group_id?.let { GroupId(it) },
+    name = TaskName(name),
+    description = description,
+    status = status.toTaskStatus(),
+    priority = priority.toTaskPriority(),
+    deadline = deadline?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(TimeZone.UTC) },
+    createdAt = Instant.fromEpochMilliseconds(created_at),
+    updatedAt = updated_at?.let { Instant.fromEpochMilliseconds(it) },
+    deletedAt = task_deleted_at?.let { Instant.fromEpochMilliseconds(it) },
+)
+
 private class InMemory(initial: List<Task>) : TasksRepository {
 
     private val allTasks = initial.toMutableList()
@@ -222,10 +205,12 @@ private class InMemory(initial: List<Task>) : TasksRepository {
         status: TaskStatus,
         priority: TaskPriority,
         deadline: LocalDateTime?,
+        groupId: GroupId?,
     ): Task {
         val task = Task(
             id = TaskId(Uuid.random().toString()),
             ownerId = ownerId,
+            groupId = groupId,
             name = TaskName(name),
             description = description,
             status = status,
@@ -243,24 +228,22 @@ private class InMemory(initial: List<Task>) : TasksRepository {
         return allTasks.find { it.id == taskId && it.ownerId == ownerId }
     }
 
-    override suspend fun updateTask(
-        ownerId: String,
-        taskId: TaskId,
-        name: String?,
-        description: String?,
-        status: TaskStatus?,
-        priority: TaskPriority?,
-        deadline: LocalDateTime?,
-    ): Task? {
+    override suspend fun updateTask(ownerId: String, taskId: TaskId, params: TaskUpdateParams): Task? {
         val idx = allTasks.indexOfFirst { it.id == taskId && it.ownerId == ownerId && it.deletedAt == null }
         if (idx == -1) return null
         val current = allTasks[idx]
+        val resolvedGroupId = when {
+            params.clearGroup -> null
+            params.groupId != null -> params.groupId
+            else -> current.groupId
+        }
         val updated = current.copy(
-            name = if (name != null) TaskName(name) else current.name,
-            description = description ?: current.description,
-            status = status ?: current.status,
-            priority = priority ?: current.priority,
-            deadline = deadline ?: current.deadline,
+            name = if (params.name != null) TaskName(params.name) else current.name,
+            description = params.description ?: current.description,
+            status = params.status ?: current.status,
+            priority = params.priority ?: current.priority,
+            deadline = params.deadline ?: current.deadline,
+            groupId = resolvedGroupId,
             updatedAt = Clock.System.now(),
         )
         allTasks[idx] = updated

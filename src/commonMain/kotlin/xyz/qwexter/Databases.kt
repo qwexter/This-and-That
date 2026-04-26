@@ -15,6 +15,24 @@ fun Application.configureDatabases(
     dbPath: String = "tat.db",
     driver: SqlDriver = NativeSqliteDriver(TatDatabase.Schema, dbPath),
 ) {
-    TatDatabase.Schema.create(driver)
+    val currentVersion = driver.getVersion()
+    if (currentVersion == 0L) {
+        TatDatabase.Schema.create(driver)
+        driver.setVersion(TatDatabase.Schema.version)
+    } else {
+        TatDatabase.Schema.migrate(driver, currentVersion, TatDatabase.Schema.version)
+        driver.setVersion(TatDatabase.Schema.version)
+    }
     attributes.put(DatabaseKey, TatDatabase(driver))
+}
+
+private fun SqlDriver.getVersion(): Long {
+    val result = executeQuery(null, "PRAGMA user_version", { cursor ->
+        app.cash.sqldelight.db.QueryResult.Value(if (cursor.next().value) cursor.getLong(0) else null)
+    }, 0)
+    return result.value ?: 0L
+}
+
+private fun SqlDriver.setVersion(version: Long) {
+    execute(null, "PRAGMA user_version = $version", 0)
 }

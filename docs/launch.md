@@ -56,14 +56,14 @@ AUTH_MODE=none DB_PATH=tat.db ./build/bin/native/debugExecutable/todo.kexe
 
 Backend listens on `http://localhost:8080`.
 
-> **Fresh DB required after schema changes.** Delete `tat.db` before running if you pulled changes that alter the schema (e.g. the `owner_id` migration). SQLDelight uses `CREATE TABLE IF NOT EXISTS` — it will not auto-migrate.
+> **Schema migrations run automatically.** On startup the server compares `PRAGMA user_version` to the compiled schema version and applies any pending migrations. No manual DB reset needed after pulling schema changes.
 
 ### 3. Run frontend dev server
 
 ```sh
 cd web
 npm install
-npm run dev       # Vite on :5173, proxies /tasks → localhost:8080
+npm run dev       # Vite on :5173, proxies /tasks /records /groups /feed → localhost:8080
 ```
 
 Open `http://localhost:5173`.

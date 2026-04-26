@@ -1,8 +1,25 @@
+CREATE TABLE IF NOT EXISTS tat_group (
+    id TEXT NOT NULL PRIMARY KEY,
+
+    owner_id TEXT NOT NULL,
+
+    title TEXT NOT NULL
+        CHECK (length(title) <= 200),
+
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    group_deleted_at INTEGER -- soft delete
+);
+
+CREATE INDEX IF NOT EXISTS group_owner_idx ON tat_group(owner_id, group_deleted_at);
+
 -- Enum constraints (stored as TEXT)
 CREATE TABLE IF NOT EXISTS task (
     id TEXT NOT NULL PRIMARY KEY,
 
     owner_id TEXT NOT NULL,
+
+    group_id TEXT REFERENCES tat_group(id),
 
     name TEXT NOT NULL,
     description TEXT,
@@ -24,11 +41,14 @@ CREATE TABLE IF NOT EXISTS task (
 CREATE INDEX IF NOT EXISTS task_status_idx ON task(status);
 CREATE INDEX IF NOT EXISTS task_deleted_idx ON task(task_deleted_at);
 CREATE INDEX IF NOT EXISTS task_owner_idx ON task(owner_id, task_deleted_at);
+CREATE INDEX IF NOT EXISTS task_group_idx ON task(group_id);
 
 CREATE TABLE IF NOT EXISTS record (
     id TEXT NOT NULL PRIMARY KEY,
 
     owner_id TEXT NOT NULL,
+
+    group_id TEXT REFERENCES tat_group(id),
 
     title TEXT NOT NULL
         CHECK (length(title) <= 200),
@@ -43,11 +63,38 @@ CREATE TABLE IF NOT EXISTS record (
 
 CREATE INDEX IF NOT EXISTS record_deleted_idx ON record(record_deleted_at);
 CREATE INDEX IF NOT EXISTS record_owner_idx ON record(owner_id, record_deleted_at);
+CREATE INDEX IF NOT EXISTS record_group_idx ON record(group_id);
+
+insertGroup:
+INSERT INTO tat_group(id, owner_id, title, created_at, updated_at, group_deleted_at)
+VALUES (:id, :owner_id, :title, :created_at, NULL, NULL);
+
+updateGroup:
+UPDATE tat_group
+SET title = :title, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND group_deleted_at IS NULL;
+
+softDeleteGroup:
+UPDATE tat_group
+SET group_deleted_at = :group_deleted_at, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND group_deleted_at IS NULL;
+
+selectGroupById:
+SELECT id, owner_id, title, created_at, updated_at, group_deleted_at
+FROM tat_group
+WHERE id = :id
+LIMIT 1;
+
+selectAllActiveGroupsByOwner:
+SELECT id, owner_id, title, created_at, updated_at, group_deleted_at
+FROM tat_group
+WHERE owner_id = :owner_id AND group_deleted_at IS NULL;
 
 insertTask:
 INSERT INTO task(
     id,
     owner_id,
+    group_id,
     name,
     description,
     priority,
@@ -60,6 +107,7 @@ INSERT INTO task(
 VALUES (
     :id,
     :owner_id,
+    :group_id,
     :name,
     :description,
     :priority,
@@ -78,6 +126,7 @@ SET
     priority = :priority,
     status = :status,
     deadline = :deadline,
+    group_id = :group_id,
     updated_at = :updated_at
 WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
 
@@ -95,6 +144,15 @@ SET
     updated_at = :updated_at
 WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
 
+updateTaskGroup:
+UPDATE task
+SET group_id = :group_id, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
+
+nullifyTasksGroup:
+UPDATE task SET group_id = NULL, updated_at = :updated_at
+WHERE group_id = :group_id AND owner_id = :owner_id;
+
 softDeleteTask:
 UPDATE task
 SET
@@ -110,27 +168,52 @@ SET
 WHERE id = :id AND owner_id = :owner_id;
 
 selectTaskById:
-SELECT id, owner_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
+SELECT id, owner_id, group_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
 FROM task
 WHERE id = :id
 LIMIT 1;
 
 selectAllActiveByOwner:
-SELECT id, owner_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
+SELECT id, owner_id, group_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
 FROM task
 WHERE owner_id = :owner_id AND task_deleted_at IS NULL;
 
+selectActiveTasksByGroup:
+SELECT id, owner_id, group_id, name, description, priority, status, deadline, created_at, updated_at, task_deleted_at
+FROM task
+WHERE group_id = :group_id AND owner_id = :owner_id AND task_deleted_at IS NULL;
+
+assignTaskToGroup:
+UPDATE task
+SET group_id = :group_id, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND task_deleted_at IS NULL;
+
+assignRecordToGroup:
+UPDATE record
+SET group_id = :group_id, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+
 insertRecord:
-INSERT INTO record(id, owner_id, title, content, created_at, updated_at, record_deleted_at)
-VALUES (:id, :owner_id, :title, :content, :created_at, :updated_at, NULL);
+INSERT INTO record(id, owner_id, group_id, title, content, created_at, updated_at, record_deleted_at)
+VALUES (:id, :owner_id, :group_id, :title, :content, :created_at, :updated_at, NULL);
 
 updateRecord:
 UPDATE record
 SET
     title = :title,
     content = :content,
+    group_id = :group_id,
     updated_at = :updated_at
 WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+
+updateRecordGroup:
+UPDATE record
+SET group_id = :group_id, updated_at = :updated_at
+WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+
+nullifyRecordsGroup:
+UPDATE record SET group_id = NULL, updated_at = :updated_at
+WHERE group_id = :group_id AND owner_id = :owner_id;
 
 softDeleteRecord:
 UPDATE record
@@ -140,12 +223,40 @@ SET
 WHERE id = :id AND owner_id = :owner_id AND record_deleted_at IS NULL;
 
 selectRecordById:
-SELECT id, owner_id, title, content, created_at, updated_at, record_deleted_at
+SELECT id, owner_id, group_id, title, content, created_at, updated_at, record_deleted_at
 FROM record
 WHERE id = :id
 LIMIT 1;
 
 selectAllActiveRecordsByOwner:
-SELECT id, owner_id, title, content, created_at, updated_at, record_deleted_at
+SELECT id, owner_id, group_id, title, content, created_at, updated_at, record_deleted_at
 FROM record
 WHERE owner_id = :owner_id AND record_deleted_at IS NULL;
+
+selectActiveRecordsByGroup:
+SELECT id, owner_id, group_id, title, content, created_at, updated_at, record_deleted_at
+FROM record
+WHERE group_id = :group_id AND owner_id = :owner_id AND record_deleted_at IS NULL;
+
+selectFeedPage:
+SELECT kind, id, created_at FROM (
+    SELECT 'group' AS kind, id, created_at FROM tat_group
+    WHERE owner_id = :owner_id AND group_deleted_at IS NULL
+    UNION ALL
+    SELECT 'task' AS kind, id, created_at FROM task
+    WHERE owner_id = :owner_id AND task_deleted_at IS NULL AND group_id IS NULL
+    UNION ALL
+    SELECT 'record' AS kind, id, created_at FROM record
+    WHERE owner_id = :owner_id AND record_deleted_at IS NULL AND group_id IS NULL
+)
+ORDER BY created_at DESC
+LIMIT :lim OFFSET :off;
+
+countFeedEntries:
+SELECT COUNT(*) FROM (
+    SELECT id FROM tat_group WHERE owner_id = :owner_id AND group_deleted_at IS NULL
+    UNION ALL
+    SELECT id FROM task WHERE owner_id = :owner_id AND task_deleted_at IS NULL AND group_id IS NULL
+    UNION ALL
+    SELECT id FROM record WHERE owner_id = :owner_id AND record_deleted_at IS NULL AND group_id IS NULL
+);

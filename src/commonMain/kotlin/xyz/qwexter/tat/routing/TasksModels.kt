@@ -36,6 +36,7 @@ internal fun ApiTaskPriority.toDomain(): TaskPriority = when (this) {
 
 internal fun Task.toApi(): ActiveTask = ActiveTask(
     id = this.id.id,
+    groupId = this.groupId?.id,
     name = this.name.name,
     description = this.description,
     status = this.status.toApi(),
@@ -46,6 +47,7 @@ internal fun Task.toApi(): ActiveTask = ActiveTask(
 @Serializable
 data class ActiveTask(
     val id: String,
+    val groupId: String?,
     val name: String,
     val description: String?,
     val status: ApiTaskStatus,
@@ -60,6 +62,7 @@ data class AddTask(
     val status: ApiTaskStatus?,
     val priority: ApiTaskPriority?,
     val deadline: LocalDateTime?,
+    val groupId: String? = null,
 )
 
 @Serializable
@@ -69,4 +72,6 @@ data class UpdateTask(
     val status: ApiTaskStatus? = null,
     val priority: ApiTaskPriority? = null,
     val deadline: LocalDateTime? = null,
+    val groupId: String? = null,
+    val clearGroup: Boolean = false,
 )

@@ -42,6 +42,7 @@ class TasksAuthTest {
         createdAt = now,
         updatedAt = null,
         deletedAt = null,
+        groupId = null,
     )
 
     private val userBTask = Task(
@@ -55,6 +56,7 @@ class TasksAuthTest {
         createdAt = now,
         updatedAt = null,
         deletedAt = null,
+        groupId = null,
     )
 
     // --- Missing header ---

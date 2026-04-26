@@ -54,6 +54,7 @@ class TasksRoutingTest {
             createdAt = now,
             updatedAt = null,
             deletedAt = null,
+            groupId = null,
         ),
 
         // 2. Task with description + deadline
@@ -68,6 +69,7 @@ class TasksRoutingTest {
             createdAt = now,
             updatedAt = null,
             deletedAt = null,
+            groupId = null,
         ),
 
         // 3. Completed task
@@ -82,6 +84,7 @@ class TasksRoutingTest {
             createdAt = now,
             updatedAt = later,
             deletedAt = null,
+            groupId = null,
         ),
 
         // 4. Overdue task (still Todo)
@@ -96,6 +99,7 @@ class TasksRoutingTest {
             createdAt = now,
             updatedAt = null,
             deletedAt = null,
+            groupId = null,
         ),
 
         // 5. Soft-deleted task (should NOT appear in GET)
@@ -110,6 +114,7 @@ class TasksRoutingTest {
             createdAt = past,
             updatedAt = past,
             deletedAt = now,
+            groupId = null,
         ),
     )
 
