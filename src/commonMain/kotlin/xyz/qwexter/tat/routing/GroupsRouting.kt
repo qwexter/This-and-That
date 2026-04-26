@@ -15,16 +15,20 @@ import io.ktor.server.routing.routing
 import xyz.qwexter.AuthMode
 import xyz.qwexter.addCORSHeaders
 import xyz.qwexter.tat.models.GroupId
+import xyz.qwexter.tat.models.SpaceId
 import xyz.qwexter.tat.repository.AddItemsError
 import xyz.qwexter.tat.repository.Either
 import xyz.qwexter.tat.repository.GroupItemInput
 import xyz.qwexter.tat.repository.GroupItemResult
+import xyz.qwexter.tat.repository.GroupUpdateParams
 import xyz.qwexter.tat.repository.GroupsRepository
+import xyz.qwexter.tat.repository.SpacesRepository
 
 private const val TITLE_MAX_LENGTH = 200
 
 fun Application.groupsRouting(
     groupsRepository: GroupsRepository,
+    spacesRepository: SpacesRepository,
     authMode: AuthMode = AuthMode.NONE,
     corsEnabled: Boolean = false,
 ) {
@@ -32,41 +36,41 @@ fun Application.groupsRouting(
         route("/groups") {
             get {
                 if (corsEnabled) call.addCORSHeaders()
-                val ownerId = call.resolveOwnerId(authMode) ?: return@get
-                call.respond(HttpStatusCode.OK, groupsRepository.allActiveGroups(ownerId).map { it.toApi() })
+                val callerId = call.resolveOwnerId(authMode) ?: return@get
+                call.respond(HttpStatusCode.OK, groupsRepository.allActiveGroups(callerId).map { it.toApi() })
             }
             get("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val ownerId = call.resolveOwnerId(authMode) ?: return@get
-                call.getGroup(groupsRepository, ownerId)
+                val callerId = call.resolveOwnerId(authMode) ?: return@get
+                call.getGroup(groupsRepository, callerId)
             }
             post {
                 if (corsEnabled) call.addCORSHeaders()
-                val ownerId = call.resolveOwnerId(authMode) ?: return@post
-                call.postGroup(groupsRepository, ownerId)
+                val callerId = call.resolveOwnerId(authMode) ?: return@post
+                call.postGroup(groupsRepository, spacesRepository, callerId)
             }
             patch("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val ownerId = call.resolveOwnerId(authMode) ?: return@patch
-                call.patchGroup(groupsRepository, ownerId)
+                val callerId = call.resolveOwnerId(authMode) ?: return@patch
+                call.patchGroup(groupsRepository, spacesRepository, callerId)
             }
             delete("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val ownerId = call.resolveOwnerId(authMode) ?: return@delete
-                call.deleteGroup(groupsRepository, ownerId)
+                val callerId = call.resolveOwnerId(authMode) ?: return@delete
+                call.deleteGroup(groupsRepository, callerId)
             }
             post("/{groupId}/items") {
                 if (corsEnabled) call.addCORSHeaders()
-                val ownerId = call.resolveOwnerId(authMode) ?: return@post
-                call.addGroupItems(groupsRepository, ownerId)
+                val callerId = call.resolveOwnerId(authMode) ?: return@post
+                call.addGroupItems(groupsRepository, callerId)
             }
         }
     }
 }
 
-private suspend fun ApplicationCall.getGroup(repo: GroupsRepository, ownerId: String) {
+private suspend fun ApplicationCall.getGroup(repo: GroupsRepository, callerId: String) {
     val groupId = GroupId(parameters["groupId"]!!)
-    val group = repo.getGroupById(ownerId, groupId)
+    val group = repo.getGroupById(callerId, groupId)
     if (group == null || group.deletedAt != null) {
         respond(HttpStatusCode.NotFound)
         return
@@ -74,24 +78,46 @@ private suspend fun ApplicationCall.getGroup(repo: GroupsRepository, ownerId: St
     respond(group.toApi())
 }
 
-private suspend fun ApplicationCall.postGroup(repo: GroupsRepository, ownerId: String) {
+private suspend fun ApplicationCall.postGroup(
+    repo: GroupsRepository,
+    spacesRepo: SpacesRepository,
+    callerId: String,
+) {
     val body = receive<AddGroup>()
     if (body.title.isBlank()) throw BadRequestException("title must not be blank")
     if (body.title.length > TITLE_MAX_LENGTH) {
         throw BadRequestException("title must not exceed $TITLE_MAX_LENGTH characters")
     }
-    val group = repo.createGroup(ownerId = ownerId, title = body.title.trim())
+    val spaceId = body.spaceId?.let { SpaceId(it) }
+        ?: spacesRepo.getOrCreatePrivateSpace(callerId).id
+    val group = repo.createGroup(ownerId = callerId, title = body.title.trim(), spaceId = spaceId)
     respond(HttpStatusCode.Created, group.toApi())
 }
 
-private suspend fun ApplicationCall.patchGroup(repo: GroupsRepository, ownerId: String) {
+private suspend fun ApplicationCall.patchGroup(
+    repo: GroupsRepository,
+    spacesRepo: SpacesRepository,
+    callerId: String,
+) {
     val groupId = GroupId(parameters["groupId"]!!)
     val body = receive<UpdateGroup>()
-    if (body.title.isBlank()) throw BadRequestException("title must not be blank")
-    if (body.title.length > TITLE_MAX_LENGTH) {
-        throw BadRequestException("title must not exceed $TITLE_MAX_LENGTH characters")
+    if (body.title != null) {
+        if (body.title.isBlank()) throw BadRequestException("title must not be blank")
+        if (body.title.length > TITLE_MAX_LENGTH) {
+            throw BadRequestException("title must not exceed $TITLE_MAX_LENGTH characters")
+        }
     }
-    val group = repo.updateGroup(ownerId = ownerId, groupId = groupId, title = body.title.trim())
+    val resolvedSpaceId = when {
+        body.spaceId != null -> SpaceId(body.spaceId)
+        body.clearSpace -> spacesRepo.getOrCreatePrivateSpace(callerId).id
+        else -> null
+    }
+    val params = GroupUpdateParams(
+        title = body.title?.trim(),
+        spaceId = resolvedSpaceId,
+        clearSpace = false,
+    )
+    val group = repo.updateGroup(ownerId = callerId, groupId = groupId, params = params)
     if (group == null) {
         respond(HttpStatusCode.NotFound)
         return
@@ -99,9 +125,9 @@ private suspend fun ApplicationCall.patchGroup(repo: GroupsRepository, ownerId: 
     respond(group.toApi())
 }
 
-private suspend fun ApplicationCall.deleteGroup(repo: GroupsRepository, ownerId: String) {
+private suspend fun ApplicationCall.deleteGroup(repo: GroupsRepository, callerId: String) {
     val groupId = GroupId(parameters["groupId"]!!)
-    val deleted = repo.deleteGroup(ownerId, groupId)
+    val deleted = repo.deleteGroup(callerId, groupId)
     if (!deleted) {
         respond(HttpStatusCode.NotFound)
         return
@@ -109,16 +135,16 @@ private suspend fun ApplicationCall.deleteGroup(repo: GroupsRepository, ownerId:
     respond(HttpStatusCode.NoContent)
 }
 
-private suspend fun ApplicationCall.addGroupItems(repo: GroupsRepository, ownerId: String) {
+private suspend fun ApplicationCall.addGroupItems(repo: GroupsRepository, callerId: String) {
     val groupId = GroupId(parameters["groupId"]!!)
-    val group = repo.getGroupById(ownerId, groupId)
+    val group = repo.getGroupById(callerId, groupId)
     if (group == null || group.deletedAt != null) {
         respond(HttpStatusCode.NotFound)
         return
     }
     val body = receive<AddGroupItemsRequest>()
     val domainItems = body.items.map { it.toDomain() }
-    when (val result = repo.addItemsToGroup(ownerId, groupId, domainItems)) {
+    when (val result = repo.addItemsToGroup(callerId, groupId, domainItems)) {
         is Either.Left -> throw BadRequestException(result.error.toMessage())
         is Either.Right -> respond(HttpStatusCode.OK, AddGroupItemsResponse(result.value.map { it.toApi() }))
     }

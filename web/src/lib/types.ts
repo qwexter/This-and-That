@@ -52,15 +52,42 @@ export interface UpdateRecord {
 
 export interface Group {
 	id: string;
+	spaceId: string | null;
 	title: string;
 }
 
 export interface AddGroup {
 	title: string;
+	spaceId?: string | null;
 }
 
 export interface UpdateGroup {
+	title?: string;
+	spaceId?: string | null;
+	clearSpace?: boolean;
+}
+
+export interface Space {
+	id: string;
 	title: string;
+	ownerId: string;
+	isPrivate: boolean;
+}
+
+export interface AddSpace {
+	title: string;
+}
+
+export interface UpdateSpace {
+	title: string;
+}
+
+export interface SpaceMember {
+	userId: string;
+}
+
+export interface AddSpaceMember {
+	userId: string;
 }
 
 export type FeedTaskChild = {

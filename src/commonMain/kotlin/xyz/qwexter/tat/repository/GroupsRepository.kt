@@ -16,6 +16,7 @@ import xyz.qwexter.tat.models.GroupTitle
 import xyz.qwexter.tat.models.Record
 import xyz.qwexter.tat.models.RecordId
 import xyz.qwexter.tat.models.RecordTitle
+import xyz.qwexter.tat.models.SpaceId
 import xyz.qwexter.tat.models.Task
 import xyz.qwexter.tat.models.TaskId
 import xyz.qwexter.tat.models.TaskName
@@ -52,14 +53,20 @@ sealed class AddItemsError {
     data class RecordInOtherGroup(val recordId: RecordId, val currentGroupId: GroupId) : AddItemsError()
 }
 
+data class GroupUpdateParams(
+    val title: String? = null,
+    val spaceId: SpaceId? = null,
+    val clearSpace: Boolean = false,
+)
+
 interface GroupsRepository {
     suspend fun allActiveGroups(ownerId: String): List<Group>
-    suspend fun createGroup(ownerId: String, title: String): Group
-    suspend fun getGroupById(ownerId: String, groupId: GroupId): Group?
-    suspend fun updateGroup(ownerId: String, groupId: GroupId, title: String): Group?
+    suspend fun createGroup(ownerId: String, title: String, spaceId: SpaceId? = null): Group
+    suspend fun getGroupById(callerId: String, groupId: GroupId): Group?
+    suspend fun updateGroup(ownerId: String, groupId: GroupId, params: GroupUpdateParams): Group?
     suspend fun deleteGroup(ownerId: String, groupId: GroupId): Boolean
     suspend fun addItemsToGroup(
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
         items: List<GroupItemInput>,
     ): Either<AddItemsError, List<GroupItemResult>>
@@ -86,79 +93,122 @@ private class DbGroupsRepository(
         db.tatDatabaseQueries.selectAllActiveGroupsByOwner(ownerId).executeAsList().map { it.toModel() }
     }
 
-    override suspend fun createGroup(ownerId: String, title: String): Group = withContext(dbDispatcher) {
-        val group = Group(
-            id = GroupId(Uuid.random().toString()),
-            ownerId = ownerId,
-            title = GroupTitle(title),
-            createdAt = Clock.System.now(),
-            updatedAt = null,
-            deletedAt = null,
-        )
-        db.tatDatabaseQueries.insertGroup(
-            id = group.id.id,
-            owner_id = ownerId,
-            title = group.title.title,
-            created_at = group.createdAt.toEpochMilliseconds(),
-        )
-        group
-    }
+    override suspend fun createGroup(ownerId: String, title: String, spaceId: SpaceId?): Group =
+        withContext(dbDispatcher) {
+            val group = Group(
+                id = GroupId(Uuid.random().toString()),
+                ownerId = ownerId,
+                spaceId = spaceId,
+                title = GroupTitle(title),
+                createdAt = Clock.System.now(),
+                updatedAt = null,
+                deletedAt = null,
+            )
+            db.tatDatabaseQueries.insertGroup(
+                id = group.id.id,
+                owner_id = ownerId,
+                space_id = spaceId?.id,
+                title = group.title.title,
+                created_at = group.createdAt.toEpochMilliseconds(),
+            )
+            group
+        }
 
-    override suspend fun getGroupById(ownerId: String, groupId: GroupId): Group? = withContext(dbDispatcher) {
+    override suspend fun getGroupById(callerId: String, groupId: GroupId): Group? = withContext(dbDispatcher) {
         val row = db.tatDatabaseQueries.selectGroupById(groupId.id).executeAsOneOrNull() ?: return@withContext null
-        if (row.owner_id != ownerId) return@withContext null
+        if (!canAccessGroup(row, callerId)) return@withContext null
         row.toModel()
     }
 
-    override suspend fun updateGroup(ownerId: String, groupId: GroupId, title: String): Group? =
+    override suspend fun updateGroup(ownerId: String, groupId: GroupId, params: GroupUpdateParams): Group? =
         withContext(dbDispatcher) {
             val existing = db.tatDatabaseQueries.selectGroupById(groupId.id).executeAsOneOrNull()
                 ?: return@withContext null
             if (existing.owner_id != ownerId) return@withContext null
-            db.tatDatabaseQueries.updateGroup(
-                title = title,
-                updated_at = Clock.System.now().toEpochMilliseconds(),
-                id = groupId.id,
-                owner_id = ownerId,
-            )
+            val now = Clock.System.now().toEpochMilliseconds()
+            if (params.title != null) {
+                db.tatDatabaseQueries.updateGroup(
+                    title = params.title,
+                    updated_at = now,
+                    id = groupId.id,
+                    owner_id = ownerId,
+                )
+            }
+            val resolvedSpaceId = when {
+                params.clearSpace -> null
+                params.spaceId != null -> params.spaceId.id
+                else -> existing.space_id
+            }
+            if (params.spaceId != null || params.clearSpace) {
+                db.tatDatabaseQueries.updateGroupSpace(
+                    space_id = resolvedSpaceId,
+                    updated_at = now,
+                    id = groupId.id,
+                    owner_id = ownerId,
+                )
+            }
             db.tatDatabaseQueries.selectGroupById(groupId.id).executeAsOneOrNull()?.toModel()
         }
 
+    override suspend fun deleteGroup(ownerId: String, groupId: GroupId): Boolean = withContext(dbDispatcher) {
+        val existing = db.tatDatabaseQueries.selectGroupById(groupId.id).executeAsOneOrNull()
+        if (existing == null || existing.group_deleted_at != null || existing.owner_id != ownerId) {
+            return@withContext false
+        }
+        val now = Clock.System.now().toEpochMilliseconds()
+        db.tatDatabaseQueries.nullifyTasksGroup(updated_at = now, group_id = groupId.id)
+        db.tatDatabaseQueries.nullifyRecordsGroup(updated_at = now, group_id = groupId.id)
+        db.tatDatabaseQueries.softDeleteGroup(
+            group_deleted_at = now,
+            updated_at = now,
+            id = groupId.id,
+            owner_id = ownerId,
+        )
+        true
+    }
+
     override suspend fun addItemsToGroup(
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
         items: List<GroupItemInput>,
     ): Either<AddItemsError, List<GroupItemResult>> = withContext(dbDispatcher) {
         for (item in items) {
-            val err = validateExistingItem(item, ownerId, groupId)
+            val err = validateExistingItem(item, callerId, groupId)
             if (err != null) return@withContext Either.Left(err)
         }
         val results = mutableListOf<GroupItemResult>()
         val now = Clock.System.now().toEpochMilliseconds()
         db.tatDatabaseQueries.transaction {
-            items.forEach { results += insertItem(it, ownerId, groupId, now) }
+            items.forEach { results += insertItem(it, callerId, groupId, now) }
         }
         Either.Right(results)
     }
 
+    private fun canAccessGroup(row: xyz.qwexter.db.Tat_group, callerId: String): Boolean {
+        if (row.owner_id == callerId) return true
+        if (row.space_id == null) return false
+        val count = db.tatDatabaseQueries.hasSpaceAccess(space_id = row.space_id, user_id = callerId).executeAsOne()
+        return count > 0
+    }
+
     private fun validateExistingItem(
         item: GroupItemInput,
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
     ): AddItemsError? = when (item) {
-        is GroupItemInput.ExistingTask -> validateExistingTask(item, ownerId, groupId)
-        is GroupItemInput.ExistingRecord -> validateExistingRecord(item, ownerId, groupId)
+        is GroupItemInput.ExistingTask -> validateExistingTask(item, callerId, groupId)
+        is GroupItemInput.ExistingRecord -> validateExistingRecord(item, callerId, groupId)
         is GroupItemInput.NewTask, is GroupItemInput.NewRecord -> null
     }
 
     private fun validateExistingTask(
         item: GroupItemInput.ExistingTask,
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
     ): AddItemsError? {
         val task = db.tatDatabaseQueries.selectTaskById(item.taskId.id).executeAsOneOrNull()
         return when {
-            task == null || task.owner_id != ownerId || task.task_deleted_at != null ->
+            task == null || task.owner_id != callerId || task.task_deleted_at != null ->
                 AddItemsError.TaskNotFound(item.taskId)
             task.group_id != null && task.group_id != groupId.id ->
                 AddItemsError.TaskInOtherGroup(item.taskId, GroupId(task.group_id))
@@ -168,12 +218,12 @@ private class DbGroupsRepository(
 
     private fun validateExistingRecord(
         item: GroupItemInput.ExistingRecord,
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
     ): AddItemsError? {
         val record = db.tatDatabaseQueries.selectRecordById(item.recordId.id).executeAsOneOrNull()
         return when {
-            record == null || record.owner_id != ownerId || record.record_deleted_at != null ->
+            record == null || record.owner_id != callerId || record.record_deleted_at != null ->
                 AddItemsError.RecordNotFound(item.recordId)
             record.group_id != null && record.group_id != groupId.id ->
                 AddItemsError.RecordInOtherGroup(item.recordId, GroupId(record.group_id))
@@ -183,30 +233,27 @@ private class DbGroupsRepository(
 
     private fun insertItem(
         item: GroupItemInput,
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
         now: Long,
     ): GroupItemResult = when (item) {
-        is GroupItemInput.NewTask -> insertNewTask(item, ownerId, groupId)
-        is GroupItemInput.NewRecord -> insertNewRecord(item, ownerId, groupId)
+        is GroupItemInput.NewTask -> insertNewTask(item, callerId, groupId)
+        is GroupItemInput.NewRecord -> insertNewRecord(item, callerId, groupId)
         is GroupItemInput.ExistingTask -> {
             db.tatDatabaseQueries.assignTaskToGroup(
                 group_id = groupId.id,
                 updated_at = now,
                 id = item.taskId.id,
-                owner_id = ownerId,
             )
             GroupItemResult.TaskResult(
                 db.tatDatabaseQueries.selectTaskById(item.taskId.id).executeAsOne().toTaskModel(),
             )
         }
-
         is GroupItemInput.ExistingRecord -> {
             db.tatDatabaseQueries.assignRecordToGroup(
                 group_id = groupId.id,
                 updated_at = now,
                 id = item.recordId.id,
-                owner_id = ownerId,
             )
             GroupItemResult.RecordResult(
                 db.tatDatabaseQueries.selectRecordById(item.recordId.id).executeAsOne().toRecordModel(),
@@ -216,13 +263,13 @@ private class DbGroupsRepository(
 
     private fun insertNewTask(
         item: GroupItemInput.NewTask,
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
     ): GroupItemResult.TaskResult {
         val id = TaskId(Uuid.random().toString())
         val createdAt = Clock.System.now()
         db.tatDatabaseQueries.insertTask(
-            id = id.id, owner_id = ownerId, group_id = groupId.id,
+            id = id.id, owner_id = callerId, group_id = groupId.id,
             name = item.name, description = item.description,
             priority = item.priority.toDb(), status = TaskStatus.Todo.toDb(),
             deadline = item.deadline?.toInstant(TimeZone.UTC)?.toEpochMilliseconds(),
@@ -230,7 +277,7 @@ private class DbGroupsRepository(
         )
         return GroupItemResult.TaskResult(
             Task(
-                id = id, ownerId = ownerId, groupId = groupId, name = TaskName(item.name),
+                id = id, ownerId = callerId, groupId = groupId, name = TaskName(item.name),
                 description = item.description, status = TaskStatus.Todo, priority = item.priority,
                 deadline = item.deadline, createdAt = createdAt, updatedAt = null, deletedAt = null,
             ),
@@ -239,14 +286,14 @@ private class DbGroupsRepository(
 
     private fun insertNewRecord(
         item: GroupItemInput.NewRecord,
-        ownerId: String,
+        callerId: String,
         groupId: GroupId,
     ): GroupItemResult.RecordResult {
         val id = RecordId(Uuid.random().toString())
         val createdAt = Clock.System.now()
         db.tatDatabaseQueries.insertRecord(
             id = id.id,
-            owner_id = ownerId,
+            owner_id = callerId,
             group_id = groupId.id,
             title = item.title,
             content = item.content,
@@ -256,7 +303,7 @@ private class DbGroupsRepository(
         return GroupItemResult.RecordResult(
             Record(
                 id = id,
-                ownerId = ownerId,
+                ownerId = callerId,
                 groupId = groupId,
                 title = RecordTitle(item.title),
                 content = item.content,
@@ -266,28 +313,12 @@ private class DbGroupsRepository(
             ),
         )
     }
-
-    override suspend fun deleteGroup(ownerId: String, groupId: GroupId): Boolean = withContext(dbDispatcher) {
-        val existing = db.tatDatabaseQueries.selectGroupById(groupId.id).executeAsOneOrNull()
-        if (existing == null || existing.group_deleted_at != null || existing.owner_id != ownerId) {
-            return@withContext false
-        }
-        val now = Clock.System.now().toEpochMilliseconds()
-        db.tatDatabaseQueries.nullifyTasksGroup(updated_at = now, group_id = groupId.id, owner_id = ownerId)
-        db.tatDatabaseQueries.nullifyRecordsGroup(updated_at = now, group_id = groupId.id, owner_id = ownerId)
-        db.tatDatabaseQueries.softDeleteGroup(
-            group_deleted_at = now,
-            updated_at = now,
-            id = groupId.id,
-            owner_id = ownerId,
-        )
-        true
-    }
 }
 
 private fun xyz.qwexter.db.Tat_group.toModel() = Group(
     id = GroupId(id),
     ownerId = owner_id,
+    spaceId = space_id?.let { SpaceId(it) },
     title = GroupTitle(title),
     createdAt = Instant.fromEpochMilliseconds(created_at),
     updatedAt = updated_at?.let { Instant.fromEpochMilliseconds(it) },

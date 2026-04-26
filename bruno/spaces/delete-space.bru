@@ -1,0 +1,15 @@
+meta {
+  name: Delete space
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/spaces/SPACE_ID
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-Id: {{userId}}
+}

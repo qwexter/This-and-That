@@ -4,9 +4,8 @@ TaT is a solution for small task and record management, like a todo-list with a 
 - [x] todo items with severity and optional deadline
 - [x] plain text records
 - [x] grouping of tasks and records
-- [ ] ability to share access to a specific group (with equal rights to edit)
+- [x] spaces — shared containers granting equal access to all groups inside
 - [ ] PWA application to be able to work offline with cached data
-
 # Tech stuff
 
 ## Tech Stack
@@ -106,8 +105,8 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 |--------|------------------------|------|--------------------------------------------------------------------|
 | GET    | /groups                | —    | List all active groups                                             |
 | GET    | /groups/{id}           | —    | Get group by ID                                                    |
-| POST   | /groups                | JSON | Create group (`title`, max 200 chars)                              |
-| PATCH  | /groups/{id}           | JSON | Rename group (`title`)                                             |
+| POST   | /groups                | JSON | Create group (`title` required, `spaceId` optional — defaults to private space) |
+| PATCH  | /groups/{id}           | JSON | Update group: `title?`, `spaceId?` (move to space), `clearSpace: true` (move to private) |
 | DELETE | /groups/{id}           | —    | Soft-delete group; items become ungrouped                          |
 | POST   | /groups/{id}/items     | JSON | Add items to group atomically (new or existing tasks/records)      |
 
@@ -118,6 +117,25 @@ All timestamps are returned as ISO-8601 UTC strings. `deadline` is a local wall-
 - `"existingRecord"` — assigns an ungrouped record by `id`
 
 All items are written in a single transaction — all succeed or all fail. Returns 400 if any item is not found or already belongs to a different group.
+
+### Spaces
+
+| Method | Path                          | Body | Description                                          |
+|--------|-------------------------------|------|------------------------------------------------------|
+| GET    | /spaces                       | —    | List spaces accessible to caller (owned + member)    |
+| GET    | /spaces/{id}                  | —    | Get space by ID (owner or member)                    |
+| POST   | /spaces                       | JSON | Create space (`title`, max 200 chars)                |
+| PATCH  | /spaces/{id}                  | JSON | Rename space (`title`) — owner only                  |
+| DELETE | /spaces/{id}                  | —    | Soft-delete space — owner only                       |
+| GET    | /spaces/{id}/members          | —    | List members — owner only                            |
+| POST   | /spaces/{id}/members          | JSON | Add member (`userId`) — owner only                   |
+| DELETE | /spaces/{id}/members/{userId} | —    | Remove member — owner only                           |
+
+Every user has a **private space** (auto-created on first group creation). It cannot be deleted or have members added. Shared spaces are created explicitly via `POST /spaces`.
+
+Groups are assigned to a space at creation time (`spaceId` in POST body) or later via `PATCH /groups/{id}`. If no `spaceId` is given at creation, the group goes into the caller's private space. `clearSpace: true` moves a group back to the private space.
+
+`PATCH /groups/{id}` now accepts optional fields: `title`, `spaceId` (assign to space), `clearSpace: true` (remove from space).
 
 ### Feed
 
@@ -189,10 +207,3 @@ Migrations live in `src/commonMain/sqldelight/migrations/` as `<version>.sqm` fi
 Schema version is stored in SQLite's `PRAGMA user_version`. On startup the server automatically runs any pending migrations — no manual steps needed.
 
 Timestamps (`created_at`, `updated_at`, `deleted_at`) are stored as Unix epoch milliseconds (UTC). `deadline` is stored as epoch milliseconds (UTC) and round-tripped as a local datetime — no server-side timezone conversion occurs.
-
-### Schema versions
-
-| Version | Change |
-|---------|--------|
-| 1       | Initial schema: `task`, `record` tables |
-| 2       | Added `tat_group` table; `group_id` FK on `task` and `record` |

@@ -3,13 +3,18 @@ import type {
 	AddGroupItemsRequest,
 	AddGroupItemsResponse,
 	AddRecord,
+	AddSpace,
+	AddSpaceMember,
 	AddTask,
 	FeedPage,
 	Group,
 	Record,
+	Space,
+	SpaceMember,
 	Task,
 	UpdateGroup,
 	UpdateRecord,
+	UpdateSpace,
 	UpdateTask
 } from './types';
 
@@ -51,6 +56,19 @@ export const api = {
 	deleteGroup: (id: string) => request<void>(`/groups/${id}`, { method: 'DELETE' }),
 	addGroupItems: (id: string, body: AddGroupItemsRequest) =>
 		request<AddGroupItemsResponse>(`/groups/${id}/items`, { method: 'POST', body: JSON.stringify(body) }),
+
+	getSpaces: () => request<Space[]>('/spaces'),
+	getSpace: (id: string) => request<Space>(`/spaces/${id}`),
+	createSpace: (body: AddSpace) =>
+		request<Space>('/spaces', { method: 'POST', body: JSON.stringify(body) }),
+	updateSpace: (id: string, body: UpdateSpace) =>
+		request<Space>(`/spaces/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+	deleteSpace: (id: string) => request<void>(`/spaces/${id}`, { method: 'DELETE' }),
+	listSpaceMembers: (id: string) => request<SpaceMember[]>(`/spaces/${id}/members`),
+	addSpaceMember: (id: string, body: AddSpaceMember) =>
+		request<SpaceMember>(`/spaces/${id}/members`, { method: 'POST', body: JSON.stringify(body) }),
+	removeSpaceMember: (id: string, userId: string) =>
+		request<void>(`/spaces/${id}/members/${userId}`, { method: 'DELETE' }),
 
 	getFeed: (params?: { limit?: number; offset?: number }) => {
 		const q = new URLSearchParams();

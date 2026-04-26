@@ -1,5 +1,5 @@
 meta {
-  name: Rename group
+  name: Update group
   type: http
   seq: 4
 }
@@ -22,4 +22,11 @@ body:json {
   {
     "title": "Updated title"
   }
+}
+
+docs {
+  All fields optional. Supported:
+  - title: rename the group
+  - spaceId: move group to a specific space
+  - clearSpace: true — move group back to caller's private space
 }

@@ -14,6 +14,7 @@
 			<a href="/tasks">Tasks</a>
 			<a href="/records">Records</a>
 			<a href="/groups">Groups</a>
+			<a href="/spaces">Spaces</a>
 		</nav>
 	</header>
 	<main>

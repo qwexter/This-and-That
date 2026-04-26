@@ -1,0 +1,21 @@
+ALTER TABLE space ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0;
+
+-- Create a private space for every user that already owns groups, tasks, or records.
+-- Uses a deterministic id: 'private-{owner_id}'.
+INSERT OR IGNORE INTO space(id, owner_id, title, is_private, created_at)
+SELECT 'private-' || owner_id, owner_id, 'Private', 1, MIN(created_at)
+FROM (
+    SELECT owner_id, created_at FROM tat_group  WHERE group_deleted_at  IS NULL
+    UNION ALL
+    SELECT owner_id, created_at FROM task        WHERE task_deleted_at   IS NULL
+    UNION ALL
+    SELECT owner_id, created_at FROM record      WHERE record_deleted_at IS NULL
+)
+GROUP BY owner_id;
+
+-- Reassign orphan groups (no space) to their owner's private space.
+UPDATE tat_group
+SET space_id = 'private-' || owner_id
+WHERE space_id IS NULL
+  AND group_deleted_at IS NULL
+  AND EXISTS (SELECT 1 FROM space WHERE id = 'private-' || tat_group.owner_id);

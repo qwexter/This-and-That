@@ -3,14 +3,19 @@ package xyz.qwexter.tat.integration
 import io.ktor.client.call.body
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import xyz.qwexter.AuthMode
 import xyz.qwexter.tat.routing.ActiveGroup
+import xyz.qwexter.tat.routing.ActiveSpace
 import xyz.qwexter.tat.routing.AddGroup
 import xyz.qwexter.tat.routing.AddRecord
+import xyz.qwexter.tat.routing.AddSpace
+import xyz.qwexter.tat.routing.AddSpaceMember
 import xyz.qwexter.tat.routing.AddTask
 import xyz.qwexter.tat.routing.ApiFeedEntry
 import xyz.qwexter.tat.routing.ApiFeedPage
@@ -163,5 +168,62 @@ class FeedRoutingTest {
     fun `GET feed clamps limit to max 100`() = dbApp {
         val page = client.get("feed?limit=999").body<ApiFeedPage>()
         assertEquals(100L, page.limit)
+    }
+
+    // --- shared-space access ---
+
+    @Test
+    fun `member sees shared-space groups in feed`() = dbApp(authMode = AuthMode.HEADER) {
+        val spaceId = client.post("spaces") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddSpace(title = "Team"))
+        }.body<ActiveSpace>().id
+
+        client.post("spaces/$spaceId/members") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddSpaceMember(userId = "bob"))
+        }
+
+        client.post("groups") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddGroup(title = "Shared Group", spaceId = spaceId))
+        }
+
+        val page = client.get("feed") { header("X-User-Id", "bob") }.body<ApiFeedPage>()
+        val groups = page.items.filterIsInstance<ApiFeedEntry.ApiGroupEntry>()
+        assertTrue(groups.any { it.title == "Shared Group" })
+    }
+
+    @Test
+    fun `member does NOT see other user's private-space groups in feed`() = dbApp(authMode = AuthMode.HEADER) {
+        client.post("groups") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddGroup(title = "Alice Private Group"))
+        }
+
+        val page = client.get("feed") { header("X-User-Id", "bob") }.body<ApiFeedPage>()
+        val groups = page.items.filterIsInstance<ApiFeedEntry.ApiGroupEntry>()
+        assertTrue(groups.none { it.title == "Alice Private Group" })
+    }
+
+    @Test
+    fun `solo tasks and records belong only to their owner in feed`() = dbApp(authMode = AuthMode.HEADER) {
+        client.post("tasks") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddTask(name = "Alice Task", description = null, status = null, priority = null, deadline = null))
+        }
+        client.post("records") {
+            header("X-User-Id", "alice")
+            contentType(ContentType.Application.Json)
+            setBody(AddRecord(title = "Alice Record"))
+        }
+
+        val page = client.get("feed") { header("X-User-Id", "bob") }.body<ApiFeedPage>()
+        assertTrue(page.items.isEmpty())
     }
 }

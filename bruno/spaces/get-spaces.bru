@@ -1,0 +1,15 @@
+meta {
+  name: Get spaces
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/spaces
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-Id: {{userId}}
+}
