@@ -3,6 +3,15 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import type { Task, TaskPriority, TaskStatus } from '$lib/types';
+	import BackLink from '$lib/ui/BackLink.svelte';
+	import Button from '$lib/ui/Button.svelte';
+	import EmptyState from '$lib/ui/EmptyState.svelte';
+	import FormField from '$lib/ui/FormField.svelte';
+	import Select from '$lib/ui/Select.svelte';
+	import TextInput from '$lib/ui/TextInput.svelte';
+	import Textarea from '$lib/ui/Textarea.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { connection } from '$lib/connection.svelte';
 
 	const id = $derived($page.params.id!);
 
@@ -17,17 +26,21 @@
 	let editStatus = $state<TaskStatus>('Todo');
 	let editDeadline = $state('');
 
+	function applyTask(t: typeof task & NonNullable<unknown>) {
+		task = t;
+		editName = t.name;
+		editDescription = t.description ?? '';
+		editPriority = t.priority;
+		editStatus = t.status;
+		editDeadline = t.deadline ?? '';
+		loading = false;
+	}
+
 	async function load() {
 		try {
-			task = await api.getTask(id);
-			editName = task.name;
-			editDescription = task.description ?? '';
-			editPriority = task.priority;
-			editStatus = task.status;
-			editDeadline = task.deadline ?? '';
+			await api.getTask(id, applyTask, applyTask);
 		} catch (e) {
 			error = (e as Error).message;
-		} finally {
 			loading = false;
 		}
 	}
@@ -36,14 +49,17 @@
 		if (!editName.trim()) return;
 		saving = true;
 		try {
-			task = await api.updateTask(id, {
+			const updated = await api.updateTask(id, {
 				name: editName.trim(),
 				description: editDescription || null,
 				priority: editPriority,
 				status: editStatus,
 				deadline: editDeadline || null
 			});
+			if (updated) task = updated;
+			toast.success('Task saved');
 		} catch (e) {
+			toast.error((e as Error).message);
 			error = (e as Error).message;
 		} finally {
 			saving = false;
@@ -52,150 +68,79 @@
 
 	async function remove() {
 		await api.deleteTask(id);
+		toast.success('Task deleted');
 		goto('/');
 	}
 
+	const priorityOptions = [
+		{ value: 'Low', label: 'Low' },
+		{ value: 'Medium', label: 'Medium' },
+		{ value: 'High', label: 'High' }
+	];
+
+	const statusOptions = [
+		{ value: 'Todo', label: 'Todo' },
+		{ value: 'Done', label: 'Done' }
+	];
+
 	$effect(() => { load(); });
+	$effect(() => { return connection.onReconnect(() => { load(); }); });
 </script>
 
-<a href="/" class="back">← Back</a>
+<BackLink href="/" label="Feed" />
 
 {#if loading}
-	<p class="state">Loading…</p>
+	<EmptyState variant="page">Loading…</EmptyState>
 {:else if error}
-	<p class="state error">{error}</p>
+	<EmptyState variant="error">{error}</EmptyState>
 {:else if task}
-	<form class="detail-form" onsubmit={(e) => { e.preventDefault(); save(); }}>
-		<div class="field">
-			<label for="name">Name</label>
-			<input id="name" bind:value={editName} required />
-		</div>
+	<form class="form" onsubmit={(e) => { e.preventDefault(); save(); }}>
+		<FormField label="Name" id="name">
+			<TextInput id="name" bind:value={editName} maxlength={200} />
+		</FormField>
 
-		<div class="field">
-			<label for="desc">Description</label>
-			<textarea id="desc" bind:value={editDescription} rows="3"></textarea>
-		</div>
+		<FormField label="Description" id="desc">
+			<Textarea id="desc" bind:value={editDescription} rows={3} />
+		</FormField>
 
 		<div class="row">
-			<div class="field">
-				<label for="priority">Priority</label>
-				<select id="priority" bind:value={editPriority}>
-					<option value="Low">Low</option>
-					<option value="Medium">Medium</option>
-					<option value="High">High</option>
-				</select>
-			</div>
-
-			<div class="field">
-				<label for="status">Status</label>
-				<select id="status" bind:value={editStatus}>
-					<option value="Todo">Todo</option>
-					<option value="Done">Done</option>
-				</select>
-			</div>
+			<FormField label="Priority" id="priority">
+				<Select id="priority" bind:value={editPriority} options={priorityOptions} />
+			</FormField>
+			<FormField label="Status" id="status">
+				<Select id="status" bind:value={editStatus} options={statusOptions} />
+			</FormField>
 		</div>
 
-		<div class="field">
-			<label for="deadline">Deadline</label>
-			<input id="deadline" type="datetime-local" bind:value={editDeadline} />
-		</div>
+		<FormField label="Deadline" id="deadline">
+			<TextInput id="deadline" type="datetime-local" bind:value={editDeadline} />
+		</FormField>
 
 		<div class="actions">
-			<button type="submit" disabled={saving}>Save</button>
-			<button type="button" class="danger" onclick={remove}>Delete</button>
+			<Button type="submit" variant="primary" disabled={saving}>
+				{saving ? 'Saving…' : 'Save'}
+			</Button>
+			<Button type="button" variant="danger" onclick={remove}>Delete</Button>
 		</div>
 	</form>
 {/if}
 
 <style>
-	.back {
-		display: inline-block;
-		color: #888;
-		margin-bottom: 1.5rem;
-		font-size: 0.9rem;
-	}
-
-	.back:hover { color: #e2e2e2; }
-
-	.state {
-		text-align: center;
-		color: #888;
-		padding: 2rem 0;
-	}
-
-	.state.error { color: #f87171; }
-
-	.detail-form {
+	.form {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
-
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.35rem;
-	}
-
-	.field label {
-		font-size: 0.8rem;
-		color: #888;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.field input,
-	.field textarea,
-	.field select {
-		padding: 0.5rem 0.75rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 0.95rem;
-		font-family: inherit;
-	}
-
-	.field textarea { resize: vertical; }
 
 	.row {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
+		gap: var(--space-4);
 	}
 
 	.actions {
 		display: flex;
-		gap: 0.75rem;
-		margin-top: 0.5rem;
-	}
-
-	.actions button {
-		padding: 0.5rem 1.25rem;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.9rem;
-	}
-
-	.actions button[type='submit'] {
-		background: #4f46e5;
-		color: #fff;
-	}
-
-	.actions button[type='submit']:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-
-	.actions .danger {
-		background: transparent;
-		border: 1px solid #f87171;
-		color: #f87171;
-	}
-
-	.actions .danger:hover {
-		background: #f87171;
-		color: #fff;
+		gap: var(--space-3);
+		margin-top: var(--space-2);
 	}
 </style>

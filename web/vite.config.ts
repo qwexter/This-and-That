@@ -34,10 +34,9 @@ export default defineConfig({
 				runtimeCaching: [
 					{
 						urlPattern: /\/(tasks|records|groups|spaces|feed)/,
-						handler: 'NetworkFirst',
+						handler: 'StaleWhileRevalidate',
 						options: {
 							cacheName: 'api-cache',
-							networkTimeoutSeconds: 5,
 							cacheableResponse: { statuses: [0, 200] }
 						}
 					}

@@ -69,7 +69,7 @@ sealed class FeedChild {
 }
 
 interface FeedRepository {
-    suspend fun getFeedPage(ownerId: String, limit: Long, offset: Long): FeedPage
+    suspend fun getFeedPage(ownerId: String, limit: Long, offset: Long, spaceId: String? = null): FeedPage
 
     companion object {
         fun create(
@@ -79,19 +79,34 @@ interface FeedRepository {
     }
 }
 
+private data class FeedRow(val kind: String, val id: String)
+
 private class DbFeedRepository(
     private val db: TatDatabase,
     private val dbDispatcher: CoroutineDispatcher,
 ) : FeedRepository {
 
-    override suspend fun getFeedPage(ownerId: String, limit: Long, offset: Long): FeedPage =
+    override suspend fun getFeedPage(ownerId: String, limit: Long, offset: Long, spaceId: String?): FeedPage =
         withContext(dbDispatcher) {
-            val total = db.tatDatabaseQueries.countFeedEntries(user_id = ownerId).executeAsOne()
-            val pageRows = db.tatDatabaseQueries.selectFeedPage(
-                user_id = ownerId,
-                lim = limit,
-                off = offset,
-            ).executeAsList()
+            val total = if (spaceId != null) {
+                db.tatDatabaseQueries.countFeedEntriesBySpace(user_id = ownerId, space_id = spaceId).executeAsOne()
+            } else {
+                db.tatDatabaseQueries.countFeedEntries(user_id = ownerId).executeAsOne()
+            }
+            val pageRows: List<FeedRow> = if (spaceId != null) {
+                db.tatDatabaseQueries.selectFeedPageBySpace(
+                    user_id = ownerId,
+                    space_id = spaceId,
+                    lim = limit,
+                    off = offset,
+                ).executeAsList().map { FeedRow(it.kind, it.id) }
+            } else {
+                db.tatDatabaseQueries.selectFeedPage(
+                    user_id = ownerId,
+                    lim = limit,
+                    off = offset,
+                ).executeAsList().map { FeedRow(it.kind, it.id) }
+            }
 
             val groupIds = pageRows.filter { it.kind == "group" }.map { it.id }
             val groupChildren = loadGroupChildren(groupIds)

@@ -7,6 +7,7 @@ import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.resources.Resources
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
 import io.ktor.server.routing.options
 import io.ktor.server.routing.routing
 import xyz.qwexter.tat.repository.FeedRepository
@@ -38,8 +39,14 @@ fun Application.configureRouting(
             call.respondText(text = "500: $cause", status = HttpStatusCode.InternalServerError)
         }
     }
+    routing {
+        get("/health") {
+            call.respondText("ok", status = HttpStatusCode.OK)
+        }
+    }
     if (corsEnabled) {
         routing {
+            options("/health") { call.respondCORSPreflight() }
             options("/tasks") { call.respondCORSPreflight() }
             options("/tasks/{...}") { call.respondCORSPreflight() }
             options("/records") { call.respondCORSPreflight() }
