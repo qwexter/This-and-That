@@ -11,6 +11,7 @@
 	}
 
 	interface Props {
+		id?: string;
 		value?: string;
 		options: SelectOption[];
 		disabled?: boolean;
@@ -19,6 +20,7 @@
 	}
 
 	let {
+		id,
 		value = $bindable(''),
 		options,
 		disabled = false,
@@ -34,6 +36,7 @@
 </script>
 
 <select
+	{id}
 	bind:value
 	{disabled}
 	class="select"

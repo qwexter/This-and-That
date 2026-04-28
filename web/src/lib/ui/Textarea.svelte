@@ -5,6 +5,7 @@
 	 * Shows optional character counter when maxlength is provided.
 	 */
 	interface Props {
+		id?: string;
 		value?: string;
 		placeholder?: string;
 		maxlength?: number;
@@ -14,6 +15,7 @@
 	}
 
 	let {
+		id,
 		value = $bindable(''),
 		placeholder = '',
 		maxlength,
@@ -27,6 +29,7 @@
 
 <div class="wrap">
 	<textarea
+		{id}
 		bind:value
 		{placeholder}
 		{maxlength}

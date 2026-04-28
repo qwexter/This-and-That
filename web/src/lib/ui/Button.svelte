@@ -20,6 +20,8 @@
 		type?: 'button' | 'submit' | 'reset';
 		disabled?: boolean;
 		active?: boolean;
+		'aria-label'?: string;
+		title?: string;
 		onclick?: (e: MouseEvent) => void;
 		children: Snippet;
 	}
@@ -30,6 +32,8 @@
 		type = 'button',
 		disabled = false,
 		active = false,
+		'aria-label': ariaLabel,
+		title,
 		onclick,
 		children
 	}: Props = $props();
@@ -42,6 +46,8 @@
 	data-variant={variant}
 	data-size={size}
 	class:active
+	aria-label={ariaLabel}
+	{title}
 	{onclick}
 >
 	{@render children()}

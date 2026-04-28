@@ -8,6 +8,7 @@
 	 * size: "sm" for compact inline edits, "md" (default) for forms.
 	 */
 	interface Props {
+		id?: string;
 		value?: string;
 		placeholder?: string;
 		maxlength?: number;
@@ -20,6 +21,7 @@
 	}
 
 	let {
+		id,
 		value = $bindable(''),
 		placeholder = '',
 		maxlength,
@@ -38,6 +40,7 @@
 </script>
 
 <input
+	{id}
 	bind:this={el}
 	{type}
 	bind:value

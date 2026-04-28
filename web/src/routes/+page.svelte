@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { api } from '$lib/api';
 	import { goto } from '$app/navigation';
-	import type { FeedEntry, FeedPage, Space, TaskPriority } from '$lib/types';
+	import type { FeedEntry, FeedPage, Group, Space, TaskPriority } from '$lib/types';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Card from '$lib/ui/Card.svelte';
@@ -15,6 +15,7 @@
 
 	// ── Data ────────────────────────────────────────────────────────────
 	let spaces = $state<Space[]>([]);
+	let groups = $state<Group[]>([]);
 	let items = $state<FeedEntry[]>([]);
 	let page = $state<FeedPage | null>(null);
 	let loading = $state(true);
@@ -76,6 +77,10 @@
 						}
 					}
 				),
+				api.getGroups(
+					(cached) => { groups = cached; },
+					(fresh)  => { groups = fresh; }
+				),
 				loadFeed(0)
 			]);
 		} catch (e) {
@@ -119,10 +124,12 @@
 	// task form
 	let taskName = $state('');
 	let taskPriority = $state<TaskPriority>('Low');
+	let taskGroupId = $state('');
 
 	// record form
 	let recordTitle = $state('');
 	let recordContent = $state('');
+	let recordGroupId = $state('');
 
 	// group form
 	let groupTitle = $state('');
@@ -133,13 +140,24 @@
 
 	const nonPrivateSpaces = $derived(spaces.filter(s => !s.isPrivate));
 
+	// groups in active shared space (empty if private/all tab)
+	const activeSpaceGroups = $derived(
+		activeSpace && !activeSpace.isPrivate
+			? groups.filter(g => g.spaceId === activeSpace!.id)
+			: []
+	);
+	// whether we need a group to attach new items (shared space selected)
+	const requiresGroup = $derived(activeSpace != null && !activeSpace.isPrivate);
+
 	function openFab(mode: FabMode) {
 		fabMode = mode;
 		fabError = null;
 		taskName = '';
 		taskPriority = 'Low';
+		taskGroupId = activeSpaceGroups.length > 0 ? activeSpaceGroups[0].id : '';
 		recordTitle = '';
 		recordContent = '';
+		recordGroupId = activeSpaceGroups.length > 0 ? activeSpaceGroups[0].id : '';
 		groupTitle = '';
 		// pre-fill group space from active tab context
 		groupSpaceId = activeSpace && !activeSpace.isPrivate ? activeSpace.id : '';
@@ -150,9 +168,17 @@
 
 	async function submitTask() {
 		if (!taskName.trim()) { fabError = 'Name required'; return; }
+		if (requiresGroup && !taskGroupId) { fabError = 'Select a group (required for shared spaces)'; return; }
 		fabBusy = true;
 		try {
-			const task = await api.createTask({ name: taskName.trim(), priority: taskPriority, description: null, status: null, deadline: null });
+			const task = await api.createTask({
+				name: taskName.trim(),
+				priority: taskPriority,
+				description: null,
+				status: null,
+				deadline: null,
+				groupId: taskGroupId || null,
+			});
 			closeFab();
 			toast.success('Task created');
 			await loadFeed(0);
@@ -167,9 +193,14 @@
 
 	async function submitRecord() {
 		if (!recordTitle.trim()) { fabError = 'Title required'; return; }
+		if (requiresGroup && !recordGroupId) { fabError = 'Select a group (required for shared spaces)'; return; }
 		fabBusy = true;
 		try {
-			const rec = await api.createRecord({ title: recordTitle.trim(), content: recordContent.trim() || null });
+			const rec = await api.createRecord({
+				title: recordTitle.trim(),
+				content: recordContent.trim() || null,
+				groupId: recordGroupId || null,
+			});
 			closeFab();
 			toast.success('Record created');
 			await loadFeed(0);
@@ -188,7 +219,10 @@
 			const grp = await api.createGroup({ title: groupTitle.trim(), spaceId: groupSpaceId || null });
 			closeFab();
 			toast.success('Group created');
-			await loadFeed(0);
+			await Promise.all([
+				loadFeed(0),
+				api.getGroups(undefined, (fresh) => { groups = fresh; }),
+			]);
 			goto(`/groups/${grp.id}`);
 		} catch (e) {
 			fabError = (e as Error).message;
@@ -374,31 +408,63 @@
 		{:else if fabMode === 'task'}
 			<div class="fab-form">
 				<h3 class="form-title">New task</h3>
-				<TextInput bind:value={taskName} placeholder="Task name" maxlength={200} autofocus
-					onkeydown={(e) => e.key === 'Enter' && submitTask()} />
-				<Select bind:value={taskPriority} options={priorityOptions} />
-				{#if fabError}<InlineError>{fabError}</InlineError>{/if}
-				<div class="form-actions">
-					<Button variant="primary" onclick={submitTask} disabled={fabBusy}>
-						{fabBusy ? 'Creating…' : 'Create task'}
-					</Button>
-					<Button variant="secondary" onclick={() => openFab('menu')}>Back</Button>
-				</div>
+				{#if requiresGroup && activeSpaceGroups.length === 0}
+					<p class="space-nudge">
+						Items in a shared space must belong to a group.
+						<a href="/groups" onclick={closeFab}>Create a group</a> in <strong>{activeSpace!.title}</strong> first.
+					</p>
+					<div class="form-actions">
+						<Button variant="secondary" onclick={() => openFab('menu')}>Back</Button>
+					</div>
+				{:else}
+					<TextInput bind:value={taskName} placeholder="Task name" maxlength={200} autofocus
+						onkeydown={(e) => e.key === 'Enter' && submitTask()} />
+					<Select bind:value={taskPriority} options={priorityOptions} />
+					{#if requiresGroup}
+						<Select
+							bind:value={taskGroupId}
+							options={activeSpaceGroups.map(g => ({ value: g.id, label: g.title }))}
+						/>
+					{/if}
+					{#if fabError}<InlineError>{fabError}</InlineError>{/if}
+					<div class="form-actions">
+						<Button variant="primary" onclick={submitTask} disabled={fabBusy}>
+							{fabBusy ? 'Creating…' : 'Create task'}
+						</Button>
+						<Button variant="secondary" onclick={() => openFab('menu')}>Back</Button>
+					</div>
+				{/if}
 			</div>
 
 		{:else if fabMode === 'record'}
 			<div class="fab-form">
 				<h3 class="form-title">New record</h3>
-				<TextInput bind:value={recordTitle} placeholder="Title" maxlength={200} autofocus
-					onkeydown={(e) => e.key === 'Enter' && submitRecord()} />
-				<Textarea bind:value={recordContent} placeholder="Content (optional)" rows={3} />
-				{#if fabError}<InlineError>{fabError}</InlineError>{/if}
-				<div class="form-actions">
-					<Button variant="primary" onclick={submitRecord} disabled={fabBusy}>
-						{fabBusy ? 'Creating…' : 'Create record'}
-					</Button>
-					<Button variant="secondary" onclick={() => openFab('menu')}>Back</Button>
-				</div>
+				{#if requiresGroup && activeSpaceGroups.length === 0}
+					<p class="space-nudge">
+						Items in a shared space must belong to a group.
+						<a href="/groups" onclick={closeFab}>Create a group</a> in <strong>{activeSpace!.title}</strong> first.
+					</p>
+					<div class="form-actions">
+						<Button variant="secondary" onclick={() => openFab('menu')}>Back</Button>
+					</div>
+				{:else}
+					<TextInput bind:value={recordTitle} placeholder="Title" maxlength={200} autofocus
+						onkeydown={(e) => e.key === 'Enter' && submitRecord()} />
+					<Textarea bind:value={recordContent} placeholder="Content (optional)" rows={3} />
+					{#if requiresGroup}
+						<Select
+							bind:value={recordGroupId}
+							options={activeSpaceGroups.map(g => ({ value: g.id, label: g.title }))}
+						/>
+					{/if}
+					{#if fabError}<InlineError>{fabError}</InlineError>{/if}
+					<div class="form-actions">
+						<Button variant="primary" onclick={submitRecord} disabled={fabBusy}>
+							{fabBusy ? 'Creating…' : 'Create record'}
+						</Button>
+						<Button variant="secondary" onclick={() => openFab('menu')}>Back</Button>
+					</div>
+				{/if}
 			</div>
 
 		{:else if fabMode === 'group'}
@@ -722,6 +788,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
+	}
+
+	.space-nudge {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.space-nudge a {
+		color: var(--color-accent);
+		text-decoration: underline;
 	}
 
 	.form-title {
