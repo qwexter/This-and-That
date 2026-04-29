@@ -215,5 +215,5 @@ Layout `$effect` keeps `document.documentElement.dataset.theme` in sync with rea
 | Top nav active state | Bottom nav highlights active route; top nav does not |
 | Sync errors silent in toast | `sync.svelte.ts` sets `lastError` but doesn't call `toast.error()` — conflicts only visible in `OfflineBanner` |
 | Offline create UX | Throws error; could show clearer "go online to create" message |
-| No `/me` endpoint integration | `offline-first-pwa.md` ADR notes needed to namespace IDB by userId for multi-device. Currently single-store, single-user assumed. |
+| IDB not namespaced by userId | `offline-first-pwa.md` ADR notes needed for multi-device. `/me` endpoint now exists; next step is to call it on load and key IDB stores by userId. |
 | Space tabs — task/record space assignment | Fixed: creating task/record on a shared space tab now shows group selector (groups in that space). If no groups exist in that space, shows nudge to create one. Items on private/All tab still created ungrouped. |

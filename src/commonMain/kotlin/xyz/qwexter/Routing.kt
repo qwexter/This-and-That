@@ -17,6 +17,7 @@ import xyz.qwexter.tat.repository.SpacesRepository
 import xyz.qwexter.tat.repository.TasksRepository
 import xyz.qwexter.tat.routing.feedRouting
 import xyz.qwexter.tat.routing.groupsRouting
+import xyz.qwexter.tat.routing.meRouting
 import xyz.qwexter.tat.routing.recordsRouting
 import xyz.qwexter.tat.routing.spacesRouting
 import xyz.qwexter.tat.routing.tasksRouting
@@ -47,6 +48,7 @@ fun Application.configureRouting(
     if (corsEnabled) {
         routing {
             options("/health") { call.respondCORSPreflight() }
+            options("/me") { call.respondCORSPreflight() }
             options("/tasks") { call.respondCORSPreflight() }
             options("/tasks/{...}") { call.respondCORSPreflight() }
             options("/records") { call.respondCORSPreflight() }
@@ -59,6 +61,7 @@ fun Application.configureRouting(
             options("/feed") { call.respondCORSPreflight() }
         }
     }
+    meRouting(authMode = authMode, corsEnabled = corsEnabled)
     tasksRouting(tasksRepository = tasksRepository, authMode = authMode, corsEnabled = corsEnabled)
     recordsRouting(recordsRepository = recordsRepository, authMode = authMode, corsEnabled = corsEnabled)
     groupsRouting(

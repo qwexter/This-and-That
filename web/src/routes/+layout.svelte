@@ -51,6 +51,7 @@
 				<a href="/records">Records</a>
 				<a href="/groups">Groups</a>
 				<a href="/spaces">Spaces</a>
+				<a href="/me">Me</a>
 			</nav>
 			<button class="theme-toggle" onclick={toggleTheme} aria-label="Toggle theme">
 				{theme === 'dark' ? '☀' : '☾'}
@@ -79,9 +80,9 @@
 			<span class="nav-icon">⊟</span>
 			<span class="nav-label">Groups</span>
 		</a>
-		<a href="/spaces" class:active={$page.url.pathname.startsWith('/spaces')}>
-			<span class="nav-icon">◈</span>
-			<span class="nav-label">Spaces</span>
+		<a href="/me" class:active={$page.url.pathname === '/me'}>
+			<span class="nav-icon">◉</span>
+			<span class="nav-label">Me</span>
 		</a>
 	</nav>
 </div>

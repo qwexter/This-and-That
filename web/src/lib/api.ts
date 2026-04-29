@@ -8,6 +8,7 @@ import type {
 	AddTask,
 	FeedPage,
 	Group,
+	Me,
 	Record,
 	Space,
 	SpaceMember,
@@ -173,6 +174,9 @@ export const api = {
 		request<SpaceMember>(`/spaces/${id}/members`, { method: 'POST', body: JSON.stringify(body) }),
 	removeSpaceMember: (id: string, userId: string) =>
 		request<void>(`/spaces/${id}/members/${userId}`, { method: 'DELETE' }),
+
+	// Me
+	getMe: () => request<Me>('/me'),
 
 	// Feed
 	getFeed: (params?: { limit?: number; offset?: number; spaceId?: string | null }, onCached?: (d: FeedPage) => void, onFresh?: (d: FeedPage) => void) => {

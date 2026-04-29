@@ -5,6 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
 	server: {
 		proxy: {
+			'/health': 'http://localhost:8080',
+			'/me': 'http://localhost:8080',
 			'/tasks': 'http://localhost:8080',
 			'/records': 'http://localhost:8080',
 			'/groups': 'http://localhost:8080',
