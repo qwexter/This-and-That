@@ -12,6 +12,7 @@
 	import InlineError from '$lib/ui/InlineError.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { connection } from '$lib/connection.svelte';
+	import { features } from '$lib/features';
 
 	// ── Data ────────────────────────────────────────────────────────────
 	let spaces = $state<Space[]>([]);
@@ -270,7 +271,7 @@
 </script>
 
 <!-- ── Space tabs ─────────────────────────────────────────────────────── -->
-{#if showTabs}
+{#if features.spaces && showTabs}
 	<div class="spaces-bar" role="tablist">
 		<button
 			role="tab"
@@ -302,7 +303,7 @@
 {:else}
 	<div class="feed">
 		{#each items as entry (entry.kind + entry.id)}
-			{#if entry.kind === 'group'}
+			{#if entry.kind === 'group' && features.groups}
 				<Card accent="group">
 					<div class="card-header">
 						<Badge variant="kind-group">group</Badge>
@@ -313,15 +314,15 @@
 						<ul class="children">
 							{#each entry.children as child (child.kind + child.id)}
 								{#if child.kind === 'task'}
-									<li class="child" data-priority={child.priority.toLowerCase()}>
+									<li class="child" data-priority={features.priority ? child.priority.toLowerCase() : ''}>
 										<span class="child-icon">✓</span>
 										<a href="/tasks/{child.id}" class="child-name" class:done={child.status === 'Done'}>{child.name}</a>
-										<Badge variant="priority-{child.priority.toLowerCase() as 'high'|'medium'|'low'}">{child.priority}</Badge>
-										{#if child.deadline}
+										{#if features.priority}<Badge variant="priority-{child.priority.toLowerCase() as 'high'|'medium'|'low'}">{child.priority}</Badge>{/if}
+										{#if features.deadline && child.deadline}
 											<span class="child-deadline">{child.deadline.slice(0, 10)}</span>
 										{/if}
 									</li>
-								{:else}
+								{:else if features.records}
 									<li class="child record-child">
 										<span class="child-icon rec">≡</span>
 										<a href="/records/{child.id}" class="child-name">{child.title}</a>
@@ -338,23 +339,23 @@
 				</Card>
 
 			{:else if entry.kind === 'task'}
-				<Card accent={taskAccent(entry.priority)}>
+				<Card accent={features.priority ? taskAccent(entry.priority) : 'none'}>
 					<div class="card-header">
 						<Badge variant="kind-task">task</Badge>
 						<a href="/tasks/{entry.id}" class="card-title" class:done={entry.status === 'Done'}>{entry.name}</a>
-						<Badge variant="priority-{entry.priority.toLowerCase() as 'high'|'medium'|'low'}">{entry.priority}</Badge>
+						{#if features.priority}<Badge variant="priority-{entry.priority.toLowerCase() as 'high'|'medium'|'low'}">{entry.priority}</Badge>{/if}
 						<Badge variant={entry.status === 'Done' ? 'status-done' : 'status-todo'}>{entry.status}</Badge>
-						{#if entry.deadline}
+						{#if features.deadline && entry.deadline}
 							<span class="card-deadline">{entry.deadline.slice(0, 10)}</span>
 						{/if}
 						<span class="card-date">{formatDate(entry.createdAt)}</span>
 					</div>
-					{#if entry.description}
+					{#if features.description && entry.description}
 						<p class="card-desc">{entry.description}</p>
 					{/if}
 				</Card>
 
-			{:else}
+			{:else if features.records}
 				<Card accent="record">
 					<div class="card-header">
 						<Badge variant="kind-record">record</Badge>
@@ -391,18 +392,24 @@
 					<span class="fab-option-icon">✓</span>
 					<span>Task</span>
 				</button>
+				{#if features.records}
 				<button class="fab-option record" onclick={() => openFab('record')}>
 					<span class="fab-option-icon">≡</span>
 					<span>Record</span>
 				</button>
+				{/if}
+				{#if features.groups}
 				<button class="fab-option group" onclick={() => openFab('group')}>
 					<span class="fab-option-icon">⊞</span>
 					<span>Group</span>
 				</button>
+				{/if}
+				{#if features.spaces}
 				<button class="fab-option space" onclick={() => openFab('space')}>
 					<span class="fab-option-icon">◈</span>
 					<span>Space</span>
 				</button>
+				{/if}
 			</div>
 
 		{:else if fabMode === 'task'}
@@ -419,7 +426,7 @@
 				{:else}
 					<TextInput bind:value={taskName} placeholder="Task name" maxlength={200} autofocus
 						onkeydown={(e) => e.key === 'Enter' && submitTask()} />
-					<Select bind:value={taskPriority} options={priorityOptions} />
+					{#if features.priority}<Select bind:value={taskPriority} options={priorityOptions} />{/if}
 					{#if requiresGroup}
 						<Select
 							bind:value={taskGroupId}

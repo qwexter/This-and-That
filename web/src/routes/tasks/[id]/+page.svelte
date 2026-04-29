@@ -12,6 +12,7 @@
 	import Textarea from '$lib/ui/Textarea.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { connection } from '$lib/connection.svelte';
+	import { features } from '$lib/features';
 
 	const id = $derived($page.params.id!);
 
@@ -99,22 +100,28 @@
 			<TextInput id="name" bind:value={editName} maxlength={200} />
 		</FormField>
 
+		{#if features.description}
 		<FormField label="Description" id="desc">
 			<Textarea id="desc" bind:value={editDescription} rows={3} />
 		</FormField>
+		{/if}
 
 		<div class="row">
+			{#if features.priority}
 			<FormField label="Priority" id="priority">
 				<Select id="priority" bind:value={editPriority} options={priorityOptions} />
 			</FormField>
+			{/if}
 			<FormField label="Status" id="status">
 				<Select id="status" bind:value={editStatus} options={statusOptions} />
 			</FormField>
 		</div>
 
+		{#if features.deadline}
 		<FormField label="Deadline" id="deadline">
 			<TextInput id="deadline" type="datetime-local" bind:value={editDeadline} />
 		</FormField>
+		{/if}
 
 		<div class="actions">
 			<Button type="submit" variant="primary" disabled={saving}>

@@ -10,6 +10,7 @@
 	import TextInput from '$lib/ui/TextInput.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { connection } from '$lib/connection.svelte';
+	import { features } from '$lib/features';
 
 	let nameInput: ReturnType<typeof TextInput> | undefined;
 	let tasks = $state<Task[]>([]);
@@ -76,7 +77,7 @@
 
 <div class="add-form">
 	<TextInput bind:this={nameInput} bind:value={newName} placeholder="New task…" onkeydown={(e) => e.key === 'Enter' && addTask()} />
-	<Select bind:value={newPriority} options={priorityOptions} size="sm" />
+	{#if features.priority}<Select bind:value={newPriority} options={priorityOptions} size="sm" />{/if}
 	<Button variant="primary" onclick={addTask} disabled={adding || !newName.trim()}>Add</Button>
 </div>
 
@@ -88,11 +89,11 @@
 	<ul class="task-list">
 		{#each todo as task (task.id)}
 			<li>
-				<Card accent={task.priority === 'High' ? 'task-high' : task.priority === 'Medium' ? 'task-medium' : 'task-low'} compact>
+				<Card accent={features.priority ? (task.priority === 'High' ? 'task-high' : task.priority === 'Medium' ? 'task-medium' : 'task-low') : 'none'} compact>
 					<div class="task-row">
 						<CheckCircle checked={false} onclick={() => toggleDone(task)} />
 						<a href="/tasks/{task.id}" class="task-name">{task.name}</a>
-						<Badge variant="priority-{task.priority.toLowerCase() as 'high'|'medium'|'low'}">{task.priority}</Badge>
+						{#if features.priority}<Badge variant="priority-{task.priority.toLowerCase() as 'high'|'medium'|'low'}">{task.priority}</Badge>{/if}
 						<Button variant="icon" onclick={() => remove(task.id)} aria-label="Delete">×</Button>
 					</div>
 				</Card>

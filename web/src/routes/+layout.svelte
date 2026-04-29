@@ -5,6 +5,7 @@
 	import { page } from '$app/stores';
 	import { initSync } from '$lib/sync.svelte';
 	import { initConnection } from '$lib/connection.svelte';
+	import { features } from '$lib/features';
 
 	$effect(() => { initSync(); initConnection(); });
 
@@ -48,10 +49,10 @@
 			<nav class="top-nav">
 				<a href="/">Feed</a>
 				<a href="/tasks">Tasks</a>
-				<a href="/records">Records</a>
-				<a href="/groups">Groups</a>
-				<a href="/spaces">Spaces</a>
-				<a href="/me">Me</a>
+				{#if features.records}<a href="/records">Records</a>{/if}
+				{#if features.groups}<a href="/groups">Groups</a>{/if}
+				{#if features.spaces}<a href="/spaces">Spaces</a>{/if}
+				{#if features.profile}<a href="/me">Me</a>{/if}
 			</nav>
 			<button class="theme-toggle" onclick={toggleTheme} aria-label="Toggle theme">
 				{theme === 'dark' ? '☀' : '☾'}
@@ -72,18 +73,24 @@
 			<span class="nav-icon">✓</span>
 			<span class="nav-label">Tasks</span>
 		</a>
+		{#if features.records}
 		<a href="/records" class:active={$page.url.pathname.startsWith('/records')}>
 			<span class="nav-icon">◧</span>
 			<span class="nav-label">Records</span>
 		</a>
+		{/if}
+		{#if features.groups}
 		<a href="/groups" class:active={$page.url.pathname.startsWith('/groups')}>
 			<span class="nav-icon">⊟</span>
 			<span class="nav-label">Groups</span>
 		</a>
+		{/if}
+		{#if features.profile}
 		<a href="/me" class:active={$page.url.pathname === '/me'}>
 			<span class="nav-icon">◉</span>
 			<span class="nav-label">Me</span>
 		</a>
+		{/if}
 	</nav>
 </div>
 
