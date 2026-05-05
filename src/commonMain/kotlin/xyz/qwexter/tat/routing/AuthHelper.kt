@@ -7,8 +7,8 @@ import xyz.qwexter.AuthMode
 
 internal const val DEV_OWNER_ID = "dev-user"
 internal const val DEV_DISPLAY_NAME = "Dev User"
-internal const val USER_ID_HEADER = "X-User-Id"
-internal const val USER_NAME_HEADER = "X-User-Name"
+internal const val USER_ID_HEADER = "X-Auth-Request-User"
+internal const val USER_NAME_HEADER = "X-Auth-Request-Email"
 
 internal suspend fun ApplicationCall.resolveOwnerId(authMode: AuthMode): String? = when (authMode) {
     AuthMode.NONE -> DEV_OWNER_ID

@@ -9,6 +9,7 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.test.TestResult
 import xyz.qwexter.AuthMode
+import xyz.qwexter.Repositories
 import xyz.qwexter.configureDatabases
 import xyz.qwexter.configureHTTP
 import xyz.qwexter.configureRouting
@@ -17,6 +18,7 @@ import xyz.qwexter.db
 import xyz.qwexter.db.TatDatabase
 import xyz.qwexter.tat.repository.FeedRepository
 import xyz.qwexter.tat.repository.GroupsRepository
+import xyz.qwexter.tat.repository.InvitesRepository
 import xyz.qwexter.tat.repository.RecordsRepository
 import xyz.qwexter.tat.repository.SpacesRepository
 import xyz.qwexter.tat.repository.TasksRepository
@@ -32,14 +34,16 @@ internal fun todoApp(
             configureHTTP()
             configureSerialization()
             configureDatabases(driver = inMemoryDriver(TatDatabase.Schema))
-            val spacesRepository = SpacesRepository.create(db)
             configureRouting(
-                tasksRepository = taskRepositoryFactory(),
-                recordsRepository = recordsRepositoryFactory(),
+                repositories = Repositories(
+                    tasks = taskRepositoryFactory(),
+                    records = recordsRepositoryFactory(),
+                    groups = GroupsRepository.create(db),
+                    feed = FeedRepository.create(db),
+                    spaces = SpacesRepository.create(db),
+                    invites = InvitesRepository.create(db),
+                ),
                 authMode = authMode,
-                groupsRepository = GroupsRepository.create(db),
-                feedRepository = FeedRepository.create(db),
-                spacesRepository = spacesRepository,
                 corsEnabled = false,
             )
         }
@@ -57,11 +61,14 @@ internal fun dbApp(
             configureSerialization()
             configureDatabases(driver = inMemoryDriver(TatDatabase.Schema))
             configureRouting(
-                tasksRepository = TasksRepository.create(db),
-                recordsRepository = RecordsRepository.create(db),
-                groupsRepository = GroupsRepository.create(db),
-                feedRepository = FeedRepository.create(db),
-                spacesRepository = SpacesRepository.create(db),
+                repositories = Repositories(
+                    tasks = TasksRepository.create(db),
+                    records = RecordsRepository.create(db),
+                    groups = GroupsRepository.create(db),
+                    feed = FeedRepository.create(db),
+                    spaces = SpacesRepository.create(db),
+                    invites = InvitesRepository.create(db),
+                ),
                 authMode = authMode,
                 corsEnabled = false,
             )

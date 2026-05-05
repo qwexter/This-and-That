@@ -11,6 +11,7 @@ export default defineConfig({
 			'/records': 'http://localhost:8080',
 			'/groups': 'http://localhost:8080',
 			'/spaces': 'http://localhost:8080',
+			'/invites': 'http://localhost:8080',
 			'/feed': 'http://localhost:8080'
 		}
 	},

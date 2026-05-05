@@ -108,55 +108,61 @@ cd web && npm run check
 
 ---
 
-## Mode 2 — Auth-test (full stack, local Docker) `[TODO]`
+## Mode 2 — Auth-test (full stack, local Docker)
 
-Runs Authelia + Caddy + backend in Docker on localhost. Tests the complete auth flow before deploying to prod.
+Runs oauth2-proxy + backend + frontend in Docker on localhost. Uses Logto Cloud for auth (free tier, no self-hosting needed).
 
-> Docker Compose files and Authelia config not yet created. Files needed:
-> - `docker-compose.auth-test.yml`
-> - `config/authelia/configuration.dev.yml`
-> - `config/authelia/users.yml`
-> - `config/Caddyfile.dev`
-> - `Dockerfile` (backend)
+**Prerequisites:** Docker Desktop on Windows (WSL2 backend). The image builds a Linux binary inside Docker — no Linux machine needed.
 
-### Planned flow
+### One-time Logto setup
+
+1. Sign up at [cloud.logto.io](https://cloud.logto.io) — free tier (50 MAU)
+2. Create application → **Traditional Web** → name: "TaT"
+3. Set **Redirect URI**: `http://localhost/oauth2/callback`
+4. Note `Endpoint`, `App ID`, `App Secret`
+5. In **Sign-in experience** → enable username/password + email registration
+
+### Configure env
 
 ```sh
-# Build backend image
-docker build -t tat-server .
-
-# Start full stack
-docker compose -f docker-compose.auth-test.yml up
-
-# Add a test user (generate password hash)
-docker run --rm authelia/authelia:latest \
-  authelia crypto hash generate argon2 --password 'MyPassword'
-# paste hash into config/authelia/users.yml
-docker compose -f docker-compose.auth-test.yml restart authelia
+cp .env.auth-test.example .env.auth-test
+# Edit .env.auth-test — fill in LOGTO_ENDPOINT, LOGTO_APP_ID, LOGTO_APP_SECRET
+# Generate OAUTH2_COOKIE_SECRET:
+python -c "import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
 ```
 
-- App: `http://localhost`
-- Authelia login UI: `http://localhost:9091`
+### Start
 
-### Planned services
+```sh
+docker compose -f docker-compose.auth-test.yml --env-file .env.auth-test up --build
+```
+
+First build takes ~10 min (Kotlin/Native compile). Subsequent builds are cached.
+
+- App: `http://localhost`
+- Register an account via Logto UI on first visit
+
+### Auth flow
+
+```
+Browser → oauth2-proxy:80
+        → if not authed → redirect to Logto Cloud login/register
+        → on success → injects X-Auth-Request-User (= Logto sub/userId)
+        → proxies to Backend:8080
+```
+
+Backend reads `X-Auth-Request-User` as `userId`. `AUTH_MODE=header`.
+
+### Services
 
 | Service | Port | Role |
 |---------|------|------|
-| Caddy | 80 | Reverse proxy, forward-auth |
-| Authelia | 9091 | Auth UI + session validation |
-| Backend (Ktor) | 8080 (internal) | API + static files |
+| oauth2-proxy | 80 (public) | OIDC auth + reverse proxy |
+| Backend (Ktor) | 8080 (internal) | API + static file serving |
 
-### Planned auth flow
+### Public routes (no auth)
 
-```
-Browser → Caddy (port 80)
-        → forward_auth → Authelia:9091
-        → if authenticated → strips client X-User-Id
-                           → injects X-User-Id from Authelia Remote-User
-        → reverse_proxy → Backend:8080
-```
-
-Backend runs with `AUTH_MODE=header`. Trusts `X-User-Id` injected by Caddy.
+`GET /invites/{token}` is excluded from oauth2-proxy auth via `OAUTH2_PROXY_SKIP_AUTH_ROUTES`. Users can preview an invite before logging in.
 
 ---
 

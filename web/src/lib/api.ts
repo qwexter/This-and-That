@@ -8,9 +8,11 @@ import type {
 	AddTask,
 	FeedPage,
 	Group,
+	InviteInfoResponse,
 	Me,
 	Record,
 	Space,
+	SpaceInviteResponse,
 	SpaceMember,
 	Task,
 	UpdateGroup,
@@ -174,6 +176,10 @@ export const api = {
 		request<SpaceMember>(`/spaces/${id}/members`, { method: 'POST', body: JSON.stringify(body) }),
 	removeSpaceMember: (id: string, userId: string) =>
 		request<void>(`/spaces/${id}/members/${userId}`, { method: 'DELETE' }),
+	createSpaceInvite: (spaceId: string) =>
+		request<SpaceInviteResponse>(`/spaces/${spaceId}/invites`, { method: 'POST' }),
+	getInvite: (token: string) => request<InviteInfoResponse>(`/invites/${token}`),
+	acceptInvite: (token: string) => request<void>(`/invites/${token}/accept`, { method: 'POST' }),
 
 	// Me
 	getMe: () => request<Me>('/me'),

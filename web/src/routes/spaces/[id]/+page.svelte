@@ -26,8 +26,7 @@
 	let titleDraft = $state('');
 	let saving = $state(false);
 
-	let newMemberId = $state('');
-	let addingMember = $state(false);
+	let sharingLink = $state(false);
 	let memberError = $state<string | null>(null);
 
 	let newGroupTitle = $state('');
@@ -72,20 +71,19 @@
 		}
 	}
 
-	async function addMember() {
-		if (!newMemberId.trim()) return;
-		addingMember = true;
+	async function shareInvite() {
+		sharingLink = true;
 		memberError = null;
 		try {
-			const member = await api.addSpaceMember(id, { userId: newMemberId.trim() });
-			members = [...members, member];
-			newMemberId = '';
-			toast.success('Member added');
+			const { token } = await api.createSpaceInvite(id);
+			const link = `${window.location.origin}/join/${token}`;
+			await navigator.clipboard.writeText(link);
+			toast.success('Invite link copied to clipboard');
 		} catch (e) {
 			memberError = (e as Error).message;
-			toast.error((e as Error).message);
+			toast.error('Failed to create invite link');
 		} finally {
-			addingMember = false;
+			sharingLink = false;
 		}
 	}
 
@@ -147,9 +145,9 @@
 		<section class="section">
 			<SectionHeading>Members</SectionHeading>
 			<div class="add-row">
-				<TextInput bind:value={newMemberId} placeholder="User ID…" size="sm"
-					onkeydown={(e) => e.key === 'Enter' && addMember()} />
-				<Button variant="primary" size="sm" onclick={addMember} disabled={addingMember || !newMemberId.trim()}>Add</Button>
+				<Button variant="secondary" size="sm" onclick={shareInvite} disabled={sharingLink}>
+					{sharingLink ? 'Generating…' : 'Copy invite link'}
+				</Button>
 			</div>
 			{#if memberError}<InlineError>{memberError}</InlineError>{/if}
 			{#if members.length === 0}

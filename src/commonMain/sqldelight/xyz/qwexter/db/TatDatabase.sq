@@ -1,3 +1,15 @@
+CREATE TABLE IF NOT EXISTS space_invite (
+    token       TEXT NOT NULL PRIMARY KEY,
+    space_id    TEXT NOT NULL REFERENCES space(id),
+    created_by  TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER,
+    max_uses    INTEGER,
+    use_count   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS space_invite_space_idx ON space_invite(space_id);
+
 CREATE TABLE IF NOT EXISTS space (
     id TEXT NOT NULL PRIMARY KEY,
 
@@ -417,3 +429,24 @@ SELECT COUNT(*) FROM (
         OR (r.group_id IS NULL AND (SELECT is_private FROM space WHERE id = :space_id) = 1)
       )
 );
+
+insertSpaceInvite:
+INSERT INTO space_invite(token, space_id, created_by, created_at, expires_at, max_uses, use_count)
+VALUES (:token, :space_id, :created_by, :created_at, :expires_at, :max_uses, 0);
+
+selectSpaceInviteByToken:
+SELECT token, space_id, created_by, created_at, expires_at, max_uses, use_count
+FROM space_invite
+WHERE token = :token
+LIMIT 1;
+
+incrementSpaceInviteUseCount:
+UPDATE space_invite SET use_count = use_count + 1 WHERE token = :token;
+
+deleteSpaceInvite:
+DELETE FROM space_invite WHERE token = :token;
+
+selectSpaceInvitesBySpace:
+SELECT token, space_id, created_by, created_at, expires_at, max_uses, use_count
+FROM space_invite
+WHERE space_id = :space_id;

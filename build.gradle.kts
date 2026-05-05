@@ -27,7 +27,7 @@ kotlin {
         }
         all {
             when {
-                hostOs == "Linux" -> linkerOpts("-L/usr/lib", "-lsqlite3", "--allow-shlib-undefined")
+                hostOs == "Linux" -> linkerOpts("-L/usr/lib/x86_64-linux-gnu", "-L/usr/lib/aarch64-linux-gnu", "-lsqlite3", "--allow-shlib-undefined")
                 hostOs.startsWith("Mac") -> linkerOpts("-lsqlite3")
                 hostOs.startsWith("Windows") -> linkerOpts("-L${rootProject.projectDir}/libs/windows", "-lsqlite3")
             }
@@ -101,7 +101,7 @@ sqldelight {
     databases {
         register("TatDatabase") {
             packageName.set("xyz.qwexter.db")
-            version = 2
+            version = 4
             migrationOutputDirectory = file("src/commonMain/sqldelight/migrations")
         }
         linkSqlite = false

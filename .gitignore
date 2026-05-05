@@ -40,9 +40,14 @@ out/
 
 ### Env
 .env
+.env.auth-test
+.env.prod
 
 ### Web (SvelteKit)
 web/node_modules/
 web/build/
 web/.svelte-kit/
 web/.env
+
+### Build cache
+.builder-checksum
