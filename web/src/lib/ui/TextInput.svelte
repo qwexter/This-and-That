@@ -39,6 +39,7 @@
 	export function select() { el?.select(); }
 </script>
 
+<!-- svelte-ignore a11y_autofocus -->
 <input
 	{id}
 	bind:this={el}

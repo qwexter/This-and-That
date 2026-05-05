@@ -355,7 +355,7 @@
 					{/if}
 				</Card>
 
-			{:else if features.records}
+			{:else if entry.kind === 'record' && features.records}
 				<Card accent="record">
 					<div class="card-header">
 						<Badge variant="kind-record">record</Badge>
