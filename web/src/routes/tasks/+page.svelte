@@ -1,7 +1,18 @@
 <script lang="ts">
 	import { api } from '$lib/api';
 	import type { Task, AddTask, TaskPriority } from '$lib/types';
+	import Badge from '$lib/ui/Badge.svelte';
+	import Button from '$lib/ui/Button.svelte';
+	import Card from '$lib/ui/Card.svelte';
+	import CheckCircle from '$lib/ui/CheckCircle.svelte';
+	import EmptyState from '$lib/ui/EmptyState.svelte';
+	import Select from '$lib/ui/Select.svelte';
+	import TextInput from '$lib/ui/TextInput.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { connection } from '$lib/connection.svelte';
+	import { features } from '$lib/features';
 
+	let nameInput: ReturnType<typeof TextInput> | undefined;
 	let tasks = $state<Task[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -11,10 +22,12 @@
 
 	async function load() {
 		try {
-			tasks = await api.getTasks();
+			await api.getTasks(
+				(cached) => { tasks = cached; loading = false; },
+				(fresh)  => { tasks = fresh;  loading = false; }
+			);
 		} catch (e) {
 			error = (e as Error).message;
-		} finally {
 			loading = false;
 		}
 	}
@@ -27,7 +40,10 @@
 			const task = await api.createTask(body);
 			tasks = [...tasks, task];
 			newName = '';
+			toast.success('Task created');
+			nameInput?.focus();
 		} catch (e) {
+			toast.error((e as Error).message);
 			error = (e as Error).message;
 		} finally {
 			adding = false;
@@ -36,46 +52,51 @@
 
 	async function toggleDone(task: Task) {
 		const updated = await api.updateTask(task.id, { status: task.status === 'Done' ? 'Todo' : 'Done' });
-		tasks = tasks.map((t) => (t.id === updated.id ? updated : t));
+		if (updated) tasks = tasks.map((t) => (t.id === updated.id ? updated : t));
+		else tasks = tasks.map((t) => t.id === task.id ? { ...t, status: task.status === 'Done' ? 'Todo' : 'Done' } as Task : t);
 	}
 
 	async function remove(id: string) {
 		await api.deleteTask(id);
 		tasks = tasks.filter((t) => t.id !== id);
+		toast.success('Task deleted');
 	}
 
 	const todo = $derived(tasks.filter((t) => t.status === 'Todo'));
 	const done = $derived(tasks.filter((t) => t.status === 'Done'));
 
+	const priorityOptions = [
+		{ value: 'Low', label: 'Low' },
+		{ value: 'Medium', label: 'Medium' },
+		{ value: 'High', label: 'High' }
+	];
+
 	$effect(() => { load(); });
+	$effect(() => { return connection.onReconnect(() => { load(); }); });
 </script>
 
-<section class="add-form">
-	<input
-		bind:value={newName}
-		placeholder="New task…"
-		onkeydown={(e) => e.key === 'Enter' && addTask()}
-	/>
-	<select bind:value={newPriority}>
-		<option value="Low">Low</option>
-		<option value="Medium">Medium</option>
-		<option value="High">High</option>
-	</select>
-	<button onclick={addTask} disabled={adding || !newName.trim()}>Add</button>
-</section>
+<div class="add-form">
+	<TextInput bind:this={nameInput} bind:value={newName} placeholder="New task…" onkeydown={(e) => e.key === 'Enter' && addTask()} />
+	{#if features.priority}<Select bind:value={newPriority} options={priorityOptions} size="sm" />{/if}
+	<Button variant="primary" onclick={addTask} disabled={adding || !newName.trim()}>Add</Button>
+</div>
 
 {#if loading}
-	<p class="state">Loading…</p>
+	<EmptyState variant="page">Loading…</EmptyState>
 {:else if error}
-	<p class="state error">{error}</p>
+	<EmptyState variant="error">{error}</EmptyState>
 {:else}
 	<ul class="task-list">
 		{#each todo as task (task.id)}
-			<li class="task" data-priority={task.priority.toLowerCase()}>
-				<button class="check" onclick={() => toggleDone(task)} aria-label="Mark done"></button>
-				<a href="/tasks/{task.id}" class="task-name">{task.name}</a>
-				<span class="badge">{task.priority}</span>
-				<button class="del" onclick={() => remove(task.id)} aria-label="Delete">×</button>
+			<li>
+				<Card accent={features.priority ? (task.priority === 'High' ? 'task-high' : task.priority === 'Medium' ? 'task-medium' : 'task-low') : 'none'} compact>
+					<div class="task-row">
+						<CheckCircle checked={false} onclick={() => toggleDone(task)} />
+						<a href="/tasks/{task.id}" class="task-name">{task.name}</a>
+						{#if features.priority}<Badge variant="priority-{task.priority.toLowerCase() as 'high'|'medium'|'low'}">{task.priority}</Badge>{/if}
+						<Button variant="icon" onclick={() => remove(task.id)} aria-label="Delete">×</Button>
+					</div>
+				</Card>
 			</li>
 		{/each}
 	</ul>
@@ -85,111 +106,72 @@
 			<summary>Done ({done.length})</summary>
 			<ul class="task-list">
 				{#each done as task (task.id)}
-					<li class="task done" data-priority={task.priority.toLowerCase()}>
-						<button class="check checked" onclick={() => toggleDone(task)} aria-label="Mark todo"></button>
-						<a href="/tasks/{task.id}" class="task-name">{task.name}</a>
-						<button class="del" onclick={() => remove(task.id)} aria-label="Delete">×</button>
+					<li>
+						<Card accent="none" compact>
+							<div class="task-row">
+								<CheckCircle checked={true} onclick={() => toggleDone(task)} />
+								<a href="/tasks/{task.id}" class="task-name done">{task.name}</a>
+								<Button variant="icon" onclick={() => remove(task.id)} aria-label="Delete">×</Button>
+							</div>
+						</Card>
 					</li>
 				{/each}
 			</ul>
 		</details>
 	{/if}
+
+	{#if tasks.length === 0}
+		<EmptyState variant="page">No tasks yet.</EmptyState>
+	{/if}
 {/if}
 
 <style>
-	.add-form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
-
-	.add-form input {
-		flex: 1;
-		padding: 0.5rem 0.75rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 1rem;
+	.add-form {
+		display: flex;
+		gap: var(--space-2);
+		margin-bottom: var(--space-6);
+		align-items: center;
 	}
 
-	.add-form select {
-		padding: 0.5rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
+	.add-form :global(.input) { flex: 1; }
+
+	.task-list {
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 
-	.add-form button {
-		padding: 0.5rem 1rem;
-		background: #4f46e5;
-		border: none;
-		border-radius: 6px;
-		color: #fff;
-		cursor: pointer;
-		font-size: 0.9rem;
-	}
-
-	.add-form button:disabled { opacity: 0.4; cursor: default; }
-
-	.state { text-align: center; color: #888; padding: 2rem 0; }
-	.state.error { color: #f87171; }
-
-	.task-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-
-	.task {
+	.task-row {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem;
-		background: #16213e;
-		border-radius: 8px;
-		border-left: 3px solid transparent;
+		gap: var(--space-3);
 	}
 
-	.task[data-priority='high'] { border-left-color: #f87171; }
-	.task[data-priority='medium'] { border-left-color: #fbbf24; }
-	.task[data-priority='low'] { border-left-color: #34d399; }
-
-	.task.done .task-name { opacity: 0.4; text-decoration: line-through; }
-
-	.task-name { flex: 1; font-size: 0.95rem; }
-
-	.badge {
-		font-size: 0.7rem;
-		padding: 0.1rem 0.4rem;
-		background: #2a2a4a;
-		border-radius: 4px;
-		color: #aaa;
+	.task-name {
+		flex: 1;
+		font-size: var(--font-size-base);
+		color: var(--color-text-primary);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.check {
-		width: 20px;
-		height: 20px;
-		border-radius: 50%;
-		border: 2px solid #4f46e5;
-		background: transparent;
-		cursor: pointer;
-		flex-shrink: 0;
+	.task-name.done {
+		opacity: 0.45;
+		text-decoration: line-through;
 	}
 
-	.check.checked { background: #4f46e5; }
-
-	.del {
-		background: transparent;
-		border: none;
-		color: #888;
-		cursor: pointer;
-		font-size: 1.2rem;
-		line-height: 1;
-		padding: 0 0.25rem;
+	.done-section {
+		margin-top: var(--space-6);
 	}
-
-	.del:hover { color: #f87171; }
-
-	.done-section { margin-top: 1.5rem; }
 
 	.done-section summary {
 		cursor: pointer;
-		color: #888;
-		margin-bottom: 0.75rem;
-		font-size: 0.9rem;
+		color: var(--color-text-muted);
+		margin-bottom: var(--space-3);
+		font-size: var(--font-size-base);
+		user-select: none;
 	}
 </style>

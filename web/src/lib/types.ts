@@ -166,3 +166,16 @@ export type GroupItemResponse =
 export interface AddGroupItemsResponse {
 	items: GroupItemResponse[];
 }
+
+export interface Me {
+	userId: string;
+	displayName: string;
+}
+
+ export interface SpaceInviteResponse {
+	token: string;
+}
+
+export interface InviteInfoResponse {
+	spaceTitle: string;
+}

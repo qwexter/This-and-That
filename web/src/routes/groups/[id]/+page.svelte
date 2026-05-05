@@ -3,6 +3,18 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import type { Group, Space, Task, Record, AddGroupItem } from '$lib/types';
+	import BackLink from '$lib/ui/BackLink.svelte';
+	import Badge from '$lib/ui/Badge.svelte';
+	import Button from '$lib/ui/Button.svelte';
+	import Card from '$lib/ui/Card.svelte';
+	import EmptyState from '$lib/ui/EmptyState.svelte';
+	import InlineError from '$lib/ui/InlineError.svelte';
+	import SectionHeading from '$lib/ui/SectionHeading.svelte';
+	import Select from '$lib/ui/Select.svelte';
+	import TextInput from '$lib/ui/TextInput.svelte';
+	import Textarea from '$lib/ui/Textarea.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { connection } from '$lib/connection.svelte';
 
 	const id = $derived($page.params.id!);
 
@@ -22,6 +34,11 @@
 	const spaceMap = $derived(new Map(spaces.map((s) => [s.id, s])));
 	const nonPrivateSpaces = $derived(spaces.filter((s) => !s.isPrivate));
 
+	const spaceOptions = $derived([
+		{ value: '', label: 'Private' },
+		...nonPrivateSpaces.map(s => ({ value: s.id, label: s.title }))
+	]);
+
 	function currentSpaceName(): string {
 		if (!group?.spaceId) return 'Private';
 		return spaceMap.get(group.spaceId)?.title ?? 'Private';
@@ -36,11 +53,10 @@
 		if (!group) return;
 		movingSpace = true;
 		try {
-			if (targetSpaceId === '') {
-				group = await api.updateGroup(id, { clearSpace: true });
-			} else {
-				group = await api.updateGroup(id, { spaceId: targetSpaceId });
-			}
+			const updated = targetSpaceId === ''
+				? await api.updateGroup(id, { clearSpace: true })
+				: await api.updateGroup(id, { spaceId: targetSpaceId });
+			if (updated) group = updated;
 		} catch (e) {
 			error = (e as Error).message;
 		} finally {
@@ -49,40 +65,71 @@
 	}
 
 	// add panel
-	let addMode = $state<'none' | 'newTask' | 'newRecord' | 'existing'>('none');
+	type AddMode = 'none' | 'newTask' | 'newRecord' | 'existing';
+	let addMode = $state<AddMode>('none');
 	let addError = $state<string | null>(null);
 	let adding = $state(false);
 
-	// new task form
 	let newTaskName = $state('');
 	let newTaskDesc = $state('');
-
-	// new record form
 	let newRecordTitle = $state('');
 	let newRecordContent = $state('');
-
-	// existing picker
 	let existingKind = $state<'task' | 'record'>('task');
 	let selectedExistingId = $state('');
 
+	const existingTaskOptions = $derived([
+		{ value: '', label: 'Select a task…' },
+		...unassignedTasks.map(t => ({ value: t.id, label: t.name }))
+	]);
+
+	const existingRecordOptions = $derived([
+		{ value: '', label: 'Select a record…' },
+		...unassignedRecords.map(r => ({ value: r.id, label: r.title }))
+	]);
+
+	function applyData(g: NonNullable<typeof group>, allTasks: typeof tasks, allRecords: typeof records, allSpaces: typeof spaces) {
+		group = g;
+		spaces = allSpaces;
+		editTitle = g.title;
+		tasks = allTasks.filter((t) => t.groupId === id);
+		records = allRecords.filter((r) => r.groupId === id);
+		unassignedTasks = allTasks.filter((t) => t.groupId === null);
+		unassignedRecords = allRecords.filter((r) => r.groupId === null);
+		loading = false;
+	}
+
 	async function load() {
 		try {
-			const [g, allTasks, allRecords, allSpaces] = await Promise.all([
-				api.getGroup(id),
-				api.getTasks(),
-				api.getRecords(),
-				api.getSpaces()
+			// Collect latest value per slot from cache+network; render as soon as all 4 slots filled.
+			let g: NonNullable<typeof group> | null = null;
+			let allTasks: typeof tasks = [];
+			let allRecords: typeof records = [];
+			let allSpaces: typeof spaces = [];
+			let filled = 0;
+			const slots = [false, false, false, false];
+			function fill(i: number) { if (!slots[i]) { slots[i] = true; filled++; } }
+			function tryRender() { if (filled === 4 && g) applyData(g, allTasks, allRecords, allSpaces); }
+
+			await Promise.all([
+				api.getGroup(id,
+					(c) => { g = c;          fill(0); tryRender(); },
+					(f) => { g = f;          fill(0); tryRender(); }
+				),
+				api.getTasks(
+					(c) => { allTasks = c;   fill(1); tryRender(); },
+					(f) => { allTasks = f;   fill(1); tryRender(); }
+				),
+				api.getRecords(
+					(c) => { allRecords = c; fill(2); tryRender(); },
+					(f) => { allRecords = f; fill(2); tryRender(); }
+				),
+				api.getSpaces(
+					(c) => { allSpaces = c;  fill(3); tryRender(); },
+					(f) => { allSpaces = f;  fill(3); tryRender(); }
+				)
 			]);
-			group = g;
-			spaces = allSpaces;
-			editTitle = g.title;
-			tasks = allTasks.filter((t) => t.groupId === id);
-			records = allRecords.filter((r) => r.groupId === id);
-			unassignedTasks = allTasks.filter((t) => t.groupId === null);
-			unassignedRecords = allRecords.filter((r) => r.groupId === null);
 		} catch (e) {
 			error = (e as Error).message;
-		} finally {
 			loading = false;
 		}
 	}
@@ -91,9 +138,12 @@
 		if (!editTitle.trim() || !group) return;
 		saving = true;
 		try {
-			group = await api.updateGroup(id, { title: editTitle.trim() });
+			const renamed = await api.updateGroup(id, { title: editTitle.trim() });
+			if (renamed) group = renamed;
 			editing = false;
+			toast.success('Group renamed');
 		} catch (e) {
+			toast.error((e as Error).message);
 			error = (e as Error).message;
 		} finally {
 			saving = false;
@@ -102,17 +152,20 @@
 
 	async function deleteGroup() {
 		await api.deleteGroup(id);
+		toast.success('Group deleted');
 		goto('/groups');
 	}
 
 	async function removeTask(taskId: string) {
 		await api.updateTask(taskId, { clearGroup: true });
 		tasks = tasks.filter((t) => t.id !== taskId);
+		toast.info('Task removed from group');
 	}
 
 	async function removeRecord(recordId: string) {
 		await api.updateRecord(recordId, { clearGroup: true });
 		records = records.filter((r) => r.id !== recordId);
+		toast.info('Record removed from group');
 	}
 
 	function cancelAdd() {
@@ -146,148 +199,154 @@
 		try {
 			await api.addGroupItems(id, { items });
 			cancelAdd();
+			toast.success('Item added to group');
 			await load();
 		} catch (e) {
 			addError = (e as Error).message;
+			toast.error((e as Error).message);
 		} finally {
 			adding = false;
 		}
 	}
 
 	$effect(() => { load(); });
+	$effect(() => { return connection.onReconnect(() => { load(); }); });
 </script>
 
+<BackLink href="/groups" label="Groups" />
+
 {#if loading}
-	<p class="state">Loading…</p>
+	<EmptyState variant="page">Loading…</EmptyState>
 {:else if error}
-	<p class="state error">{error}</p>
+	<EmptyState variant="error">{error}</EmptyState>
 {:else if group}
-	<div class="group-header">
+
+	<!-- Header -->
+	<div class="header">
 		{#if editing}
-			<input
-				class="title-input"
-				bind:value={editTitle}
-				maxlength="200"
-				onkeydown={(e) => e.key === 'Enter' && saveTitle()}
-			/>
-			<button onclick={saveTitle} disabled={saving || !editTitle.trim()}>Save</button>
-			<button class="cancel" onclick={() => { editing = false; editTitle = group!.title; }}>Cancel</button>
+			<TextInput bind:value={editTitle} maxlength={200} size="sm" autofocus
+				onkeydown={(e) => {
+					if (e.key === 'Enter') saveTitle();
+					if (e.key === 'Escape') { editing = false; editTitle = group!.title; }
+				}} />
+			<Button variant="primary" size="sm" onclick={saveTitle} disabled={saving || !editTitle.trim()}>Save</Button>
+			<Button variant="secondary" size="sm" onclick={() => { editing = false; editTitle = group!.title; }}>Cancel</Button>
 		{:else}
-			<h1 class="group-title">{group.title}</h1>
-			<span class="space-badge" class:private={isCurrentSpacePrivate()}>{currentSpaceName()}</span>
-			<button class="edit-btn" onclick={() => { editing = true; }}>Edit</button>
-			<button class="del-btn" onclick={deleteGroup}>Delete group</button>
+			<h1 class="title">{group.title}</h1>
+			<Badge variant={isCurrentSpacePrivate() ? 'space-private' : 'space-shared'} pill>
+				{currentSpaceName()}
+			</Badge>
+			<Button variant="secondary" size="sm" onclick={() => editing = true}>Edit</Button>
+			<Button variant="danger" size="sm" onclick={deleteGroup}>Delete</Button>
 		{/if}
 	</div>
 
-	<div class="move-space-row">
-		<label for="move-space-select" class="move-label">Space:</label>
-		<select
-			id="move-space-select"
-			class="move-select"
-			disabled={movingSpace}
+	<!-- Space selector -->
+	<div class="space-row">
+		<span class="space-label">Space</span>
+		<Select
 			value={group.spaceId ?? ''}
-			onchange={(e) => moveToSpace((e.target as HTMLSelectElement).value)}
-		>
-			<option value="">Private</option>
-			{#each nonPrivateSpaces as s (s.id)}
-				<option value={s.id}>{s.title}</option>
-			{/each}
-		</select>
+			options={spaceOptions}
+			size="sm"
+			disabled={movingSpace}
+			onchange={moveToSpace}
+		/>
 	</div>
 
 	<!-- Add items panel -->
 	{#if addMode === 'none'}
 		<div class="add-bar">
-			<button class="add-btn" onclick={() => addMode = 'newTask'}>+ New task</button>
-			<button class="add-btn" onclick={() => addMode = 'newRecord'}>+ New record</button>
-			<button class="add-btn secondary" onclick={() => addMode = 'existing'}>+ Add existing</button>
+			<Button variant="ghost" size="sm" onclick={() => addMode = 'newTask'}>+ New task</Button>
+			<Button variant="ghost" size="sm" onclick={() => addMode = 'newRecord'}>+ New record</Button>
+			<Button variant="secondary" size="sm" onclick={() => addMode = 'existing'}>+ Add existing</Button>
 		</div>
 	{:else}
 		<div class="add-panel">
 			{#if addMode === 'newTask'}
-				<h3>New task</h3>
-				<input class="form-input" placeholder="Task name" bind:value={newTaskName} maxlength="200" />
-				<textarea class="form-textarea" placeholder="Description (optional)" bind:value={newTaskDesc}></textarea>
+				<p class="panel-title">New task</p>
+				<TextInput bind:value={newTaskName} placeholder="Task name" maxlength={200} autofocus
+					onkeydown={(e) => { if (e.key === 'Enter') submitAdd(); if (e.key === 'Escape') cancelAdd(); }} />
+				<Textarea bind:value={newTaskDesc} placeholder="Description (optional)" rows={2} />
 			{:else if addMode === 'newRecord'}
-				<h3>New record</h3>
-				<input class="form-input" placeholder="Title" bind:value={newRecordTitle} maxlength="200" />
-				<textarea class="form-textarea" placeholder="Content (optional)" bind:value={newRecordContent}></textarea>
+				<p class="panel-title">New record</p>
+				<TextInput bind:value={newRecordTitle} placeholder="Title" maxlength={200} autofocus
+					onkeydown={(e) => { if (e.key === 'Enter') submitAdd(); if (e.key === 'Escape') cancelAdd(); }} />
+				<Textarea bind:value={newRecordContent} placeholder="Content (optional)" rows={2} />
 			{:else if addMode === 'existing'}
-				<h3>Add existing item</h3>
+				<p class="panel-title">Add existing</p>
 				<div class="kind-toggle">
-					<button class:active={existingKind === 'task'} onclick={() => { existingKind = 'task'; selectedExistingId = ''; }}>Tasks</button>
-					<button class:active={existingKind === 'record'} onclick={() => { existingKind = 'record'; selectedExistingId = ''; }}>Records</button>
+					<Button variant="secondary" size="sm" active={existingKind === 'task'}
+						onclick={() => { existingKind = 'task'; selectedExistingId = ''; }}>Tasks</Button>
+					<Button variant="secondary" size="sm" active={existingKind === 'record'}
+						onclick={() => { existingKind = 'record'; selectedExistingId = ''; }}>Records</Button>
 				</div>
 				{#if existingKind === 'task'}
 					{#if unassignedTasks.length === 0}
-						<p class="empty">No ungrouped tasks.</p>
+						<EmptyState variant="inline">No ungrouped tasks.</EmptyState>
 					{:else}
-						<select class="form-select" bind:value={selectedExistingId}>
-							<option value="">Select a task…</option>
-							{#each unassignedTasks as t (t.id)}
-								<option value={t.id}>{t.name}</option>
-							{/each}
-						</select>
+						<Select bind:value={selectedExistingId} options={existingTaskOptions} />
 					{/if}
 				{:else}
 					{#if unassignedRecords.length === 0}
-						<p class="empty">No ungrouped records.</p>
+						<EmptyState variant="inline">No ungrouped records.</EmptyState>
 					{:else}
-						<select class="form-select" bind:value={selectedExistingId}>
-							<option value="">Select a record…</option>
-							{#each unassignedRecords as r (r.id)}
-								<option value={r.id}>{r.title}</option>
-							{/each}
-						</select>
+						<Select bind:value={selectedExistingId} options={existingRecordOptions} />
 					{/if}
 				{/if}
 			{/if}
 
-			{#if addError}
-				<p class="add-error">{addError}</p>
-			{/if}
+			{#if addError}<InlineError>{addError}</InlineError>{/if}
 
 			<div class="panel-actions">
-				<button class="submit-btn" onclick={submitAdd} disabled={adding}>
-					{adding ? 'Saving…' : 'Add'}
-				</button>
-				<button class="cancel" onclick={cancelAdd} disabled={adding}>Cancel</button>
+				<Button variant="primary" size="sm" onclick={submitAdd} disabled={adding}>
+					{adding ? 'Adding…' : 'Add'}
+				</Button>
+				<Button variant="secondary" size="sm" onclick={cancelAdd} disabled={adding}>Cancel</Button>
 			</div>
 		</div>
 	{/if}
 
+	<!-- Tasks -->
 	<section class="section">
-		<h2>Tasks ({tasks.length})</h2>
+		<SectionHeading>Tasks ({tasks.length})</SectionHeading>
 		{#if tasks.length === 0}
-			<p class="empty">No tasks in this group.</p>
+			<EmptyState variant="inline">No tasks in this group.</EmptyState>
 		{:else}
-			<ul class="item-list">
+			<ul class="list">
 				{#each tasks as task (task.id)}
-					<li class="item" data-priority={task.priority.toLowerCase()}>
-						<a href="/tasks/{task.id}" class="item-name" class:done={task.status === 'Done'}>{task.name}</a>
-						<span class="badge">{task.priority}</span>
-						<span class="status" class:done={task.status === 'Done'}>{task.status}</span>
-						<button class="remove" onclick={() => removeTask(task.id)} title="Remove from group">↗</button>
+					<li>
+						<Card accent={task.priority === 'High' ? 'task-high' : task.priority === 'Medium' ? 'task-medium' : 'task-low'} compact>
+							<div class="item-row">
+								<a href="/tasks/{task.id}" class="item-name" class:done={task.status === 'Done'}>{task.name}</a>
+								<Badge variant="priority-{task.priority.toLowerCase() as 'high'|'medium'|'low'}">{task.priority}</Badge>
+								<Badge variant={task.status === 'Done' ? 'status-done' : 'status-todo'}>{task.status}</Badge>
+								<Button variant="icon" onclick={() => removeTask(task.id)} title="Remove from group">↗</Button>
+							</div>
+						</Card>
 					</li>
 				{/each}
 			</ul>
 		{/if}
 	</section>
 
+	<!-- Records -->
 	<section class="section">
-		<h2>Records ({records.length})</h2>
+		<SectionHeading>Records ({records.length})</SectionHeading>
 		{#if records.length === 0}
-			<p class="empty">No records in this group.</p>
+			<EmptyState variant="inline">No records in this group.</EmptyState>
 		{:else}
-			<ul class="item-list">
+			<ul class="list">
 				{#each records as record (record.id)}
-					<li class="item record-item">
-						<a href="/records/{record.id}" class="item-name">{record.title}</a>
-						{#if record.content}
-							<span class="preview">{record.content.slice(0, 50)}{record.content.length > 50 ? '…' : ''}</span>
-						{/if}
-						<button class="remove" onclick={() => removeRecord(record.id)} title="Remove from group">↗</button>
+					<li>
+						<Card accent="record" compact>
+							<div class="item-row">
+								<a href="/records/{record.id}" class="item-name">{record.title}</a>
+								{#if record.content}
+									<span class="preview">{record.content.slice(0, 50)}{record.content.length > 50 ? '…' : ''}</span>
+								{/if}
+								<Button variant="icon" onclick={() => removeRecord(record.id)} title="Remove from group">↗</Button>
+							</div>
+						</Card>
 					</li>
 				{/each}
 			</ul>
@@ -296,257 +355,99 @@
 {/if}
 
 <style>
-	.state { text-align: center; color: #888; padding: 2rem 0; }
-	.state.error { color: #f87171; }
-
-	.group-header {
+	.header {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		margin-bottom: 1.5rem;
+		gap: var(--space-3);
+		margin-bottom: var(--space-5);
 		flex-wrap: wrap;
 	}
 
-	.group-title {
+	.title {
 		flex: 1;
 		font-size: 1.3rem;
 		font-weight: 700;
+		color: var(--color-text-primary);
 	}
 
-	.space-badge {
-		font-size: 0.7rem;
-		padding: 0.15rem 0.5rem;
-		background: #1e3a5f;
-		color: #60a5fa;
-		border-radius: 999px;
-		white-space: nowrap;
-	}
-
-	.space-badge.private {
-		background: #2a2a4a;
-		color: #888;
-	}
-
-	.move-space-row {
+	.space-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 1.25rem;
+		gap: var(--space-2);
+		margin-bottom: var(--space-5);
 	}
 
-	.move-label {
-		font-size: 0.8rem;
-		color: #888;
+	.space-label {
+		font-size: var(--font-size-sm);
+		color: var(--color-text-muted);
 	}
 
-	.move-select {
-		padding: 0.3rem 0.5rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 0.85rem;
-		cursor: pointer;
-	}
-
-	.move-select:disabled { opacity: 0.5; cursor: default; }
-
-	.title-input {
-		flex: 1;
-		padding: 0.4rem 0.6rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 1.1rem;
-	}
-
-	.group-header button {
-		padding: 0.4rem 0.8rem;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.85rem;
-	}
-
-	.group-header button:not(.cancel):not(.del-btn) { background: #4f46e5; color: #fff; }
-	.group-header button:disabled { opacity: 0.4; cursor: default; }
-	.cancel { background: #2a2a4a !important; color: #aaa !important; }
-	.edit-btn { background: #2a2a4a; color: #aaa; }
-	.del-btn { background: #7f1d1d; color: #fca5a5; }
-
-	/* add bar */
 	.add-bar {
 		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 1.5rem;
+		gap: var(--space-2);
+		margin-bottom: var(--space-5);
 		flex-wrap: wrap;
 	}
 
-	.add-btn {
-		padding: 0.4rem 0.9rem;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		background: #16213e;
-		color: #a5b4fc;
-		cursor: pointer;
-		font-size: 0.85rem;
-	}
-
-	.add-btn:hover { background: #1e2a50; }
-	.add-btn.secondary { color: #9ca3af; }
-
-	/* add panel */
 	.add-panel {
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 8px;
-		padding: 1rem;
-		margin-bottom: 1.5rem;
+		background: var(--color-bg-sunken);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-4);
+		margin-bottom: var(--space-5);
 		display: flex;
 		flex-direction: column;
-		gap: 0.6rem;
+		gap: var(--space-3);
 	}
 
-	.add-panel h3 {
-		font-size: 0.9rem;
+	.panel-title {
+		font-size: var(--font-size-base);
 		font-weight: 600;
-		color: #a5b4fc;
-		margin: 0;
-	}
-
-	.form-input, .form-select {
-		padding: 0.45rem 0.6rem;
-		background: #0f172a;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 0.9rem;
-		width: 100%;
-		box-sizing: border-box;
-	}
-
-	.form-textarea {
-		padding: 0.45rem 0.6rem;
-		background: #0f172a;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 0.9rem;
-		width: 100%;
-		box-sizing: border-box;
-		min-height: 5rem;
-		resize: vertical;
-		font-family: inherit;
+		color: var(--color-accent-text);
 	}
 
 	.kind-toggle {
 		display: flex;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
-
-	.kind-toggle button {
-		padding: 0.3rem 0.8rem;
-		border: 1px solid #2a2a4a;
-		border-radius: 5px;
-		background: transparent;
-		color: #888;
-		cursor: pointer;
-		font-size: 0.8rem;
-	}
-
-	.kind-toggle button.active {
-		background: #2a2a4a;
-		color: #e2e2e2;
-	}
-
-	.add-error { color: #f87171; font-size: 0.82rem; }
 
 	.panel-actions {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
-	.submit-btn {
-		padding: 0.4rem 1rem;
-		background: #4f46e5;
-		color: #fff;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.85rem;
+	.section {
+		margin-bottom: var(--space-8);
 	}
 
-	.submit-btn:disabled { opacity: 0.4; cursor: default; }
-
-	.panel-actions .cancel {
-		padding: 0.4rem 0.8rem;
-		background: #2a2a4a;
-		color: #aaa;
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.85rem;
-	}
-
-	.section { margin-bottom: 2rem; }
-
-	.section h2 {
-		font-size: 0.85rem;
-		color: #888;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin-bottom: 0.75rem;
-	}
-
-	.empty { color: #555; font-size: 0.85rem; }
-
-	.item-list {
+	.list {
 		list-style: none;
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
-	.item {
+	.item-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 0.6rem 0.75rem;
-		background: #16213e;
-		border-radius: 6px;
-		border-left: 3px solid transparent;
+		gap: var(--space-2);
 	}
 
-	.item[data-priority='high'] { border-left-color: #f87171; }
-	.item[data-priority='medium'] { border-left-color: #fbbf24; }
-	.item[data-priority='low'] { border-left-color: #34d399; }
-	.record-item { border-left-color: #38bdf8; }
-
-	.item-name { flex: 1; font-size: 0.9rem; }
-	.item-name.done { opacity: 0.4; text-decoration: line-through; }
-
-	.badge, .status {
-		font-size: 0.68rem;
-		padding: 0.1rem 0.35rem;
-		background: #2a2a4a;
-		border-radius: 3px;
-		color: #aaa;
+	.item-name {
+		flex: 1;
+		font-size: var(--font-size-base);
+		color: var(--color-text-primary);
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.status { color: #34d399; }
-	.status.done { color: #555; }
+	.item-name.done { opacity: 0.45; text-decoration: line-through; }
 
-	.preview { font-size: 0.75rem; color: #666; flex: 1; }
-
-	.remove {
-		background: transparent;
-		border: none;
-		color: #555;
-		cursor: pointer;
-		font-size: 0.9rem;
-		padding: 0 0.2rem;
+	.preview {
+		font-size: var(--font-size-xs);
+		color: var(--color-text-faint);
+		flex-shrink: 0;
 	}
-
-	.remove:hover { color: #fbbf24; }
 </style>

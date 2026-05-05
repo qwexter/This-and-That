@@ -135,7 +135,7 @@ request_header X-User-Name {http.reverse_proxy.header.Remote-Name}
 
 | Task | Effort |
 |------|--------|
-| `/me` endpoint on Ktor | Small |
+| `/me` endpoint on Ktor | Done ✓ |
 | `X-User-Name` header in Caddyfile | Trivial |
 | IndexedDB store (`idb` wrapper, keyed by `userId`) | Small |
 | Sync queue (pending writes, retry on reconnect) | Medium |

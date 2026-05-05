@@ -1,3 +1,15 @@
+CREATE TABLE IF NOT EXISTS space_invite (
+    token       TEXT NOT NULL PRIMARY KEY,
+    space_id    TEXT NOT NULL REFERENCES space(id),
+    created_by  TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER,
+    max_uses    INTEGER,
+    use_count   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS space_invite_space_idx ON space_invite(space_id);
+
 CREATE TABLE IF NOT EXISTS space (
     id TEXT NOT NULL PRIMARY KEY,
 
@@ -375,3 +387,66 @@ SELECT COUNT(*) FROM (
     UNION ALL
     SELECT id FROM record WHERE owner_id = :user_id AND record_deleted_at IS NULL AND group_id IS NULL
 );
+
+selectFeedPageBySpace:
+SELECT kind, id, created_at FROM (
+    SELECT 'group' AS kind, g.id, g.created_at FROM tat_group g
+    WHERE g.group_deleted_at IS NULL AND g.space_id = :space_id
+    UNION ALL
+    SELECT 'task' AS kind, t.id, t.created_at FROM task t
+    WHERE t.owner_id = :user_id AND t.task_deleted_at IS NULL
+      AND (
+        t.group_id IN (SELECT id FROM tat_group WHERE space_id = :space_id AND group_deleted_at IS NULL)
+        OR (t.group_id IS NULL AND (SELECT is_private FROM space WHERE id = :space_id) = 1)
+      )
+    UNION ALL
+    SELECT 'record' AS kind, r.id, r.created_at FROM record r
+    WHERE r.owner_id = :user_id AND r.record_deleted_at IS NULL
+      AND (
+        r.group_id IN (SELECT id FROM tat_group WHERE space_id = :space_id AND group_deleted_at IS NULL)
+        OR (r.group_id IS NULL AND (SELECT is_private FROM space WHERE id = :space_id) = 1)
+      )
+)
+ORDER BY created_at DESC
+LIMIT :lim OFFSET :off;
+
+countFeedEntriesBySpace:
+SELECT COUNT(*) FROM (
+    SELECT g.id FROM tat_group g
+    WHERE g.group_deleted_at IS NULL AND g.space_id = :space_id
+    UNION ALL
+    SELECT t.id FROM task t
+    WHERE t.owner_id = :user_id AND t.task_deleted_at IS NULL
+      AND (
+        t.group_id IN (SELECT id FROM tat_group WHERE space_id = :space_id AND group_deleted_at IS NULL)
+        OR (t.group_id IS NULL AND (SELECT is_private FROM space WHERE id = :space_id) = 1)
+      )
+    UNION ALL
+    SELECT r.id FROM record r
+    WHERE r.owner_id = :user_id AND r.record_deleted_at IS NULL
+      AND (
+        r.group_id IN (SELECT id FROM tat_group WHERE space_id = :space_id AND group_deleted_at IS NULL)
+        OR (r.group_id IS NULL AND (SELECT is_private FROM space WHERE id = :space_id) = 1)
+      )
+);
+
+insertSpaceInvite:
+INSERT INTO space_invite(token, space_id, created_by, created_at, expires_at, max_uses, use_count)
+VALUES (:token, :space_id, :created_by, :created_at, :expires_at, :max_uses, 0);
+
+selectSpaceInviteByToken:
+SELECT token, space_id, created_by, created_at, expires_at, max_uses, use_count
+FROM space_invite
+WHERE token = :token
+LIMIT 1;
+
+incrementSpaceInviteUseCount:
+UPDATE space_invite SET use_count = use_count + 1 WHERE token = :token;
+
+deleteSpaceInvite:
+DELETE FROM space_invite WHERE token = :token;
+
+selectSpaceInvitesBySpace:
+SELECT token, space_id, created_by, created_at, expires_at, max_uses, use_count
+FROM space_invite
+WHERE space_id = :space_id;

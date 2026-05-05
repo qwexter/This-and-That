@@ -116,7 +116,7 @@ class TasksAuthTest {
         taskRepositoryFactory = createTasksRepositoryInMemoryList(listOf(userATask, userBTask)),
         authMode = AuthMode.HEADER,
     ) {
-        val response = client.get("tasks") { header("X-User-Id", "user-a") }
+        val response = client.get("tasks") { header("X-Auth-Request-User", "user-a") }
         val tasks = response.body<List<ActiveTask>>()
 
         assertEquals(HttpStatusCode.OK, response.status)
@@ -129,7 +129,7 @@ class TasksAuthTest {
         taskRepositoryFactory = createTasksRepositoryInMemoryList(listOf(userATask)),
         authMode = AuthMode.HEADER,
     ) {
-        val tasks = client.get("tasks") { header("X-User-Id", "user-b") }.body<List<ActiveTask>>()
+        val tasks = client.get("tasks") { header("X-Auth-Request-User", "user-b") }.body<List<ActiveTask>>()
         assertTrue(tasks.isEmpty())
     }
 
@@ -138,7 +138,7 @@ class TasksAuthTest {
         taskRepositoryFactory = createTasksRepositoryInMemoryList(listOf(userATask)),
         authMode = AuthMode.HEADER,
     ) {
-        val response = client.get("tasks/task-a") { header("X-User-Id", "user-b") }
+        val response = client.get("tasks/task-a") { header("X-Auth-Request-User", "user-b") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
@@ -147,7 +147,7 @@ class TasksAuthTest {
         taskRepositoryFactory = createTasksRepositoryInMemoryList(listOf(userATask)),
         authMode = AuthMode.HEADER,
     ) {
-        val response = client.get("tasks/task-a") { header("X-User-Id", "user-a") }
+        val response = client.get("tasks/task-a") { header("X-Auth-Request-User", "user-a") }
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("task-a", response.body<ActiveTask>().id)
     }
@@ -158,7 +158,7 @@ class TasksAuthTest {
         authMode = AuthMode.HEADER,
     ) {
         val response = client.patch("tasks/task-a") {
-            header("X-User-Id", "user-b")
+            header("X-Auth-Request-User", "user-b")
             contentType(ContentType.Application.Json)
             setBody(UpdateTask(status = ApiTaskStatus.Done))
         }
@@ -171,7 +171,7 @@ class TasksAuthTest {
         authMode = AuthMode.HEADER,
     ) {
         val response = client.patch("tasks/task-a") {
-            header("X-User-Id", "user-a")
+            header("X-Auth-Request-User", "user-a")
             contentType(ContentType.Application.Json)
             setBody(UpdateTask(status = ApiTaskStatus.Done))
         }
@@ -184,7 +184,7 @@ class TasksAuthTest {
         taskRepositoryFactory = createTasksRepositoryInMemoryList(listOf(userATask)),
         authMode = AuthMode.HEADER,
     ) {
-        val response = client.delete("tasks/task-a") { header("X-User-Id", "user-b") }
+        val response = client.delete("tasks/task-a") { header("X-Auth-Request-User", "user-b") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
@@ -193,7 +193,7 @@ class TasksAuthTest {
         taskRepositoryFactory = createTasksRepositoryInMemoryList(listOf(userATask)),
         authMode = AuthMode.HEADER,
     ) {
-        val response = client.delete("tasks/task-a") { header("X-User-Id", "user-a") }
+        val response = client.delete("tasks/task-a") { header("X-Auth-Request-User", "user-a") }
         assertEquals(HttpStatusCode.NoContent, response.status)
     }
 
@@ -203,17 +203,17 @@ class TasksAuthTest {
         authMode = AuthMode.HEADER,
     ) {
         client.post("tasks") {
-            header("X-User-Id", "user-a")
+            header("X-Auth-Request-User", "user-a")
             contentType(ContentType.Application.Json)
             setBody(AddTask(name = "My task", description = null, status = null, priority = null, deadline = null))
         }
 
         // user-a sees it
-        val aTasks = client.get("tasks") { header("X-User-Id", "user-a") }.body<List<ActiveTask>>()
+        val aTasks = client.get("tasks") { header("X-Auth-Request-User", "user-a") }.body<List<ActiveTask>>()
         assertEquals(1, aTasks.size)
 
         // user-b does not
-        val bTasks = client.get("tasks") { header("X-User-Id", "user-b") }.body<List<ActiveTask>>()
+        val bTasks = client.get("tasks") { header("X-Auth-Request-User", "user-b") }.body<List<ActiveTask>>()
         assertTrue(bTasks.isEmpty())
     }
 }

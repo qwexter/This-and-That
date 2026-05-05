@@ -5,10 +5,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
 	server: {
 		proxy: {
+			'/health': 'http://localhost:8080',
+			'/me': 'http://localhost:8080',
 			'/tasks': 'http://localhost:8080',
 			'/records': 'http://localhost:8080',
 			'/groups': 'http://localhost:8080',
 			'/spaces': 'http://localhost:8080',
+			'/invites': 'http://localhost:8080',
 			'/feed': 'http://localhost:8080'
 		}
 	},
@@ -34,10 +37,9 @@ export default defineConfig({
 				runtimeCaching: [
 					{
 						urlPattern: /\/(tasks|records|groups|spaces|feed)/,
-						handler: 'NetworkFirst',
+						handler: 'StaleWhileRevalidate',
 						options: {
 							cacheName: 'api-cache',
-							networkTimeoutSeconds: 5,
 							cacheableResponse: { statuses: [0, 200] }
 						}
 					}

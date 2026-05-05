@@ -1,0 +1,45 @@
+services:
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.8.2
+    ports:
+      - "80:4180"
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${LOGTO_ENDPOINT}/oidc
+      OAUTH2_PROXY_CLIENT_ID: ${LOGTO_APP_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${LOGTO_APP_SECRET}
+      OAUTH2_PROXY_REDIRECT_URL: http://localhost/oauth2/callback
+      OAUTH2_PROXY_UPSTREAMS: http://app:8080
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_COOKIE_SECRET}
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_COOKIE_NAME: _tat_auth
+      # Pass Logto sub claim as X-Auth-Request-User → Ktor reads it as userId
+      OAUTH2_PROXY_USER_ID_CLAIM: sub
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_PASS_ACCESS_TOKEN: "false"
+      # Skip auth for public invite preview endpoint
+      OAUTH2_PROXY_SKIP_AUTH_ROUTES: "^/invites/[^/]+$"
+      # Skip auth for static assets served by Ktor
+      OAUTH2_PROXY_SKIP_AUTH_PREFLIGHT: "true"
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      AUTH_MODE: header
+      DB_PATH: /data/tat.db
+      PORT: "8080"
+      HOST: "0.0.0.0"
+    volumes:
+      - tat_data:/data
+    restart: unless-stopped
+
+volumes:
+  tat_data:

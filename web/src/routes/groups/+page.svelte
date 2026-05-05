@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { api } from '$lib/api';
 	import type { Group, Space } from '$lib/types';
+	import Badge from '$lib/ui/Badge.svelte';
+	import Button from '$lib/ui/Button.svelte';
+	import Card from '$lib/ui/Card.svelte';
+	import EmptyState from '$lib/ui/EmptyState.svelte';
+	import Select from '$lib/ui/Select.svelte';
+	import TextInput from '$lib/ui/TextInput.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { connection } from '$lib/connection.svelte';
 
+	let titleInput: ReturnType<typeof TextInput> | undefined;
 	let groups = $state<Group[]>([]);
 	let spaces = $state<Space[]>([]);
 	let loading = $state(true);
@@ -12,6 +21,11 @@
 
 	const spaceMap = $derived(new Map(spaces.map((s) => [s.id, s])));
 	const nonPrivateSpaces = $derived(spaces.filter((s) => !s.isPrivate));
+
+	const spaceOptions = $derived([
+		{ value: '', label: 'Private' },
+		...nonPrivateSpaces.map(s => ({ value: s.id, label: s.title }))
+	]);
 
 	function spaceName(spaceId: string | null): string {
 		if (!spaceId) return 'Private';
@@ -25,10 +39,21 @@
 
 	async function load() {
 		try {
-			[groups, spaces] = await Promise.all([api.getGroups(), api.getSpaces()]);
+			// run both SWR fetches in parallel; set loading=false on first data from either
+			let gotGroups = false, gotSpaces = false;
+			function maybeReady() { if (gotGroups && gotSpaces) loading = false; }
+			await Promise.all([
+				api.getGroups(
+					(cached) => { groups = cached; gotGroups = true; maybeReady(); },
+					(fresh)  => { groups = fresh;  gotGroups = true; maybeReady(); }
+				),
+				api.getSpaces(
+					(cached) => { spaces = cached; gotSpaces = true; maybeReady(); },
+					(fresh)  => { spaces = fresh;  gotSpaces = true; maybeReady(); }
+				)
+			]);
 		} catch (e) {
 			error = (e as Error).message;
-		} finally {
 			loading = false;
 		}
 	}
@@ -37,14 +62,14 @@
 		if (!newTitle.trim()) return;
 		adding = true;
 		try {
-			const group = await api.createGroup({
-				title: newTitle.trim(),
-				spaceId: newSpaceId || null
-			});
+			const group = await api.createGroup({ title: newTitle.trim(), spaceId: newSpaceId || null });
 			groups = [...groups, group];
 			newTitle = '';
 			newSpaceId = '';
+			toast.success('Group created');
+			titleInput?.focus();
 		} catch (e) {
+			toast.error((e as Error).message);
 			error = (e as Error).message;
 		} finally {
 			adding = false;
@@ -54,44 +79,41 @@
 	async function remove(id: string) {
 		await api.deleteGroup(id);
 		groups = groups.filter((g) => g.id !== id);
+		toast.success('Group deleted');
 	}
 
 	$effect(() => { load(); });
+	$effect(() => { return connection.onReconnect(() => { load(); }); });
 </script>
 
-<section class="add-form">
-	<input
-		bind:value={newTitle}
-		placeholder="New group title…"
-		maxlength="200"
-		onkeydown={(e) => e.key === 'Enter' && addGroup()}
-	/>
+<div class="add-form">
+	<TextInput bind:this={titleInput} bind:value={newTitle} placeholder="New group…" maxlength={200}
+		onkeydown={(e) => e.key === 'Enter' && addGroup()} />
 	{#if nonPrivateSpaces.length > 0}
-		<select bind:value={newSpaceId} class="space-select">
-			<option value="">Private</option>
-			{#each nonPrivateSpaces as s (s.id)}
-				<option value={s.id}>{s.title}</option>
-			{/each}
-		</select>
+		<Select bind:value={newSpaceId} options={spaceOptions} size="sm" />
 	{/if}
-	<button onclick={addGroup} disabled={adding || !newTitle.trim()}>Add</button>
-</section>
+	<Button variant="primary" onclick={addGroup} disabled={adding || !newTitle.trim()}>Add</Button>
+</div>
 
 {#if loading}
-	<p class="state">Loading…</p>
+	<EmptyState variant="page">Loading…</EmptyState>
 {:else if error}
-	<p class="state error">{error}</p>
+	<EmptyState variant="error">{error}</EmptyState>
 {:else if groups.length === 0}
-	<p class="state">No groups yet.</p>
+	<EmptyState variant="page">No groups yet.</EmptyState>
 {:else}
-	<ul class="group-list">
+	<ul class="list">
 		{#each groups as group (group.id)}
-			<li class="group-item">
-				<a href="/groups/{group.id}" class="group-title">{group.title}</a>
-				<span class="space-badge" class:private={spaceIsPrivate(group.spaceId)}>
-					{spaceName(group.spaceId)}
-				</span>
-				<button class="del" onclick={() => remove(group.id)} aria-label="Delete">×</button>
+			<li>
+				<Card accent="group" compact>
+					<div class="row">
+						<a href="/groups/{group.id}" class="title">{group.title}</a>
+						<Badge variant={spaceIsPrivate(group.spaceId) ? 'space-private' : 'space-shared'} pill>
+							{spaceName(group.spaceId)}
+						</Badge>
+						<Button variant="icon" onclick={() => remove(group.id)} aria-label="Delete">×</Button>
+					</div>
+				</Card>
 			</li>
 		{/each}
 	</ul>
@@ -100,93 +122,31 @@
 <style>
 	.add-form {
 		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 1.5rem;
+		gap: var(--space-2);
+		margin-bottom: var(--space-6);
+		align-items: center;
 		flex-wrap: wrap;
 	}
 
-	.add-form input {
-		flex: 1;
-		min-width: 8rem;
-		padding: 0.5rem 0.75rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 1rem;
-	}
+	.add-form :global(.input) { flex: 1; min-width: 8rem; }
 
-	.space-select {
-		padding: 0.5rem 0.6rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 0.9rem;
-		cursor: pointer;
-	}
-
-	.add-form button {
-		padding: 0.5rem 1rem;
-		background: #4f46e5;
-		border: none;
-		border-radius: 6px;
-		color: #fff;
-		cursor: pointer;
-		font-size: 0.9rem;
-	}
-
-	.add-form button:disabled { opacity: 0.4; cursor: default; }
-
-	.state { text-align: center; color: #888; padding: 2rem 0; }
-	.state.error { color: #f87171; }
-
-	.group-list {
+	.list {
 		list-style: none;
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
-	.group-item {
+	.row {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 1rem;
-		background: #16213e;
-		border-radius: 8px;
-		border-left: 3px solid #818cf8;
+		gap: var(--space-3);
 	}
 
-	.group-title {
+	.title {
 		flex: 1;
-		font-size: 0.95rem;
+		font-size: var(--font-size-base);
 		font-weight: 500;
+		color: var(--color-text-primary);
 	}
-
-	.space-badge {
-		font-size: 0.7rem;
-		padding: 0.15rem 0.5rem;
-		background: #1e3a5f;
-		color: #60a5fa;
-		border-radius: 999px;
-		white-space: nowrap;
-	}
-
-	.space-badge.private {
-		background: #2a2a4a;
-		color: #888;
-	}
-
-	.del {
-		background: transparent;
-		border: none;
-		color: #888;
-		cursor: pointer;
-		font-size: 1.2rem;
-		line-height: 1;
-		padding: 0 0.25rem;
-	}
-
-	.del:hover { color: #f87171; }
 </style>

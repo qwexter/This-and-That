@@ -6,7 +6,9 @@ import io.ktor.server.response.respond
 import xyz.qwexter.AuthMode
 
 internal const val DEV_OWNER_ID = "dev-user"
-internal const val USER_ID_HEADER = "X-User-Id"
+internal const val DEV_DISPLAY_NAME = "Dev User"
+internal const val USER_ID_HEADER = "X-Auth-Request-User"
+internal const val USER_NAME_HEADER = "X-Auth-Request-Email"
 
 internal suspend fun ApplicationCall.resolveOwnerId(authMode: AuthMode): String? = when (authMode) {
     AuthMode.NONE -> DEV_OWNER_ID
@@ -19,4 +21,9 @@ internal suspend fun ApplicationCall.resolveOwnerId(authMode: AuthMode): String?
             id
         }
     }
+}
+
+internal fun ApplicationCall.resolveDisplayName(authMode: AuthMode, userId: String): String = when (authMode) {
+    AuthMode.NONE -> DEV_DISPLAY_NAME
+    AuthMode.HEADER -> request.headers[USER_NAME_HEADER]?.takeIf { it.isNotBlank() } ?: userId
 }

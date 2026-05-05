@@ -28,7 +28,8 @@ fun Application.feedRouting(
             val ownerId = call.resolveOwnerId(authMode) ?: return@get
             val limit = call.request.queryParameters["limit"]?.toLongOrNull()?.coerceIn(1, MAX_LIMIT) ?: DEFAULT_LIMIT
             val offset = call.request.queryParameters["offset"]?.toLongOrNull()?.coerceAtLeast(0) ?: 0L
-            val page = feedRepository.getFeedPage(ownerId, limit, offset)
+            val spaceId = call.request.queryParameters["spaceId"]?.takeIf { it.isNotBlank() }
+            val page = feedRepository.getFeedPage(ownerId, limit, offset, spaceId)
             call.respond(HttpStatusCode.OK, page.toApi())
         }
     }

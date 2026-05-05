@@ -175,24 +175,24 @@ class FeedRoutingTest {
     @Test
     fun `member sees shared-space groups in feed`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Team"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
         client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Shared Group", spaceId = spaceId))
         }
 
-        val page = client.get("feed") { header("X-User-Id", "bob") }.body<ApiFeedPage>()
+        val page = client.get("feed") { header("X-Auth-Request-User", "bob") }.body<ApiFeedPage>()
         val groups = page.items.filterIsInstance<ApiFeedEntry.ApiGroupEntry>()
         assertTrue(groups.any { it.title == "Shared Group" })
     }
@@ -200,12 +200,12 @@ class FeedRoutingTest {
     @Test
     fun `member does NOT see other user's private-space groups in feed`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Alice Private Group"))
         }
 
-        val page = client.get("feed") { header("X-User-Id", "bob") }.body<ApiFeedPage>()
+        val page = client.get("feed") { header("X-Auth-Request-User", "bob") }.body<ApiFeedPage>()
         val groups = page.items.filterIsInstance<ApiFeedEntry.ApiGroupEntry>()
         assertTrue(groups.none { it.title == "Alice Private Group" })
     }
@@ -213,17 +213,17 @@ class FeedRoutingTest {
     @Test
     fun `solo tasks and records belong only to their owner in feed`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("tasks") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddTask(name = "Alice Task", description = null, status = null, priority = null, deadline = null))
         }
         client.post("records") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddRecord(title = "Alice Record"))
         }
 
-        val page = client.get("feed") { header("X-User-Id", "bob") }.body<ApiFeedPage>()
+        val page = client.get("feed") { header("X-Auth-Request-User", "bob") }.body<ApiFeedPage>()
         assertTrue(page.items.isEmpty())
     }
 }

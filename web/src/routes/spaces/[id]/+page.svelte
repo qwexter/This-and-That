@@ -3,6 +3,16 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/api';
 	import type { Group, Space, SpaceMember } from '$lib/types';
+	import BackLink from '$lib/ui/BackLink.svelte';
+	import Badge from '$lib/ui/Badge.svelte';
+	import Button from '$lib/ui/Button.svelte';
+	import Card from '$lib/ui/Card.svelte';
+	import EmptyState from '$lib/ui/EmptyState.svelte';
+	import InlineError from '$lib/ui/InlineError.svelte';
+	import SectionHeading from '$lib/ui/SectionHeading.svelte';
+	import TextInput from '$lib/ui/TextInput.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { connection } from '$lib/connection.svelte';
 
 	const id = $derived($page.params.id!);
 
@@ -16,28 +26,71 @@
 	let titleDraft = $state('');
 	let saving = $state(false);
 
-	let newMemberId = $state('');
-	let addingMember = $state(false);
+	let sharingLink = $state(false);
+	let memberError = $state<string | null>(null);
 
 	let newGroupTitle = $state('');
 	let addingGroup = $state(false);
 
 	async function load() {
 		try {
-			const [s, m, allGroups] = await Promise.all([
-				api.getSpace(id),
-				api.listSpaceMembers(id),
-				api.getGroups()
+			let s: typeof space = null, gotSpace = false, gotGroups = false;
+			function tryReady() { if (gotSpace && gotGroups) loading = false; }
+
+			await Promise.all([
+				api.getSpace(id,
+					(c) => { space = c; titleDraft = c.title; gotSpace = true; tryReady(); },
+					(f) => { space = f; titleDraft = f.title; gotSpace = true; tryReady(); }
+				),
+				// members not cached (no store for members) — fetch directly
+				api.listSpaceMembers(id).then((m) => { members = m; }),
+				api.getGroups(
+					(c) => { groups = c.filter((g) => g.spaceId === id); gotGroups = true; tryReady(); },
+					(f) => { groups = f.filter((g) => g.spaceId === id); gotGroups = true; tryReady(); }
+				)
 			]);
-			space = s;
-			members = m;
-			groups = allGroups.filter((g) => g.spaceId === id);
-			titleDraft = s.title;
 		} catch (e) {
 			error = (e as Error).message;
-		} finally {
 			loading = false;
 		}
+	}
+
+	async function saveTitle() {
+		if (!titleDraft.trim() || !space) return;
+		saving = true;
+		try {
+			const updated = await api.updateSpace(id, { title: titleDraft.trim() });
+			if (updated) space = updated;
+			editingTitle = false;
+			toast.success('Space renamed');
+		} catch (e) {
+			toast.error((e as Error).message);
+			error = (e as Error).message;
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function shareInvite() {
+		sharingLink = true;
+		memberError = null;
+		try {
+			const { token } = await api.createSpaceInvite(id);
+			const link = `${window.location.origin}/join/${token}`;
+			await navigator.clipboard.writeText(link);
+			toast.success('Invite link copied to clipboard');
+		} catch (e) {
+			memberError = (e as Error).message;
+			toast.error('Failed to create invite link');
+		} finally {
+			sharingLink = false;
+		}
+	}
+
+	async function removeMember(userId: string) {
+		await api.removeSpaceMember(id, userId);
+		members = members.filter((m) => m.userId !== userId);
+		toast.info('Member removed');
 	}
 
 	async function createGroupHere() {
@@ -47,115 +100,94 @@
 			const group = await api.createGroup({ title: newGroupTitle.trim(), spaceId: id });
 			groups = [...groups, group];
 			newGroupTitle = '';
+			toast.success('Group created');
 		} catch (e) {
+			toast.error((e as Error).message);
 			error = (e as Error).message;
 		} finally {
 			addingGroup = false;
 		}
 	}
 
-	async function saveTitle() {
-		if (!titleDraft.trim() || !space) return;
-		saving = true;
-		try {
-			space = await api.updateSpace(id, { title: titleDraft.trim() });
-			editingTitle = false;
-		} catch (e) {
-			error = (e as Error).message;
-		} finally {
-			saving = false;
-		}
-	}
-
-	async function addMember() {
-		if (!newMemberId.trim()) return;
-		addingMember = true;
-		try {
-			const member = await api.addSpaceMember(id, { userId: newMemberId.trim() });
-			members = [...members, member];
-			newMemberId = '';
-		} catch (e) {
-			error = (e as Error).message;
-		} finally {
-			addingMember = false;
-		}
-	}
-
-	async function removeMember(userId: string) {
-		await api.removeSpaceMember(id, userId);
-		members = members.filter((m) => m.userId !== userId);
-	}
-
 	$effect(() => { load(); });
+	$effect(() => { return connection.onReconnect(() => { load(); }); });
 </script>
 
+<BackLink href="/spaces" label="Spaces" />
+
 {#if loading}
-	<p class="state">Loading…</p>
+	<EmptyState variant="page">Loading…</EmptyState>
 {:else if error}
-	<p class="state error">{error}</p>
+	<EmptyState variant="error">{error}</EmptyState>
 {:else if space}
+	<!-- Title row -->
 	<div class="header">
-		{#if editingTitle}
-			<input
-				bind:value={titleDraft}
-				class="title-input"
-				maxlength="200"
-				onkeydown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') editingTitle = false; }}
-			/>
-			<button onclick={saveTitle} disabled={saving || !titleDraft.trim()}>Save</button>
-			<button class="secondary" onclick={() => editingTitle = false}>Cancel</button>
+		{#if editingTitle && !space.isPrivate}
+			<TextInput bind:value={titleDraft} maxlength={200} size="sm"
+				onkeydown={(e) => {
+					if (e.key === 'Enter') saveTitle();
+					if (e.key === 'Escape') editingTitle = false;
+				}} />
+			<Button variant="primary" size="sm" onclick={saveTitle} disabled={saving || !titleDraft.trim()}>Save</Button>
+			<Button variant="secondary" size="sm" onclick={() => editingTitle = false}>Cancel</Button>
 		{:else}
-			<h1>{space.title}</h1>
-			{#if !space.isPrivate}
-				<button class="secondary" onclick={() => { titleDraft = space!.title; editingTitle = true; }}>Rename</button>
+			<h1 class="title">{space.title}</h1>
+			{#if space.isPrivate}
+				<Badge variant="space-private" pill>Private</Badge>
+			{:else}
+				<Button variant="secondary" size="sm" onclick={() => { titleDraft = space!.title; editingTitle = true; }}>Rename</Button>
 			{/if}
 		{/if}
 	</div>
 
+	<!-- Members (shared spaces only) -->
 	{#if !space.isPrivate}
-	<section class="section">
-		<h2>Members</h2>
-		<div class="add-form">
-			<input
-				bind:value={newMemberId}
-				placeholder="User ID…"
-				onkeydown={(e) => e.key === 'Enter' && addMember()}
-			/>
-			<button onclick={addMember} disabled={addingMember || !newMemberId.trim()}>Add</button>
-		</div>
-		{#if members.length === 0}
-			<p class="empty">No members yet.</p>
-		{:else}
-			<ul class="member-list">
-				{#each members as member (member.userId)}
-					<li class="member-item">
-						<span class="member-id">{member.userId}</span>
-						<button class="del" onclick={() => removeMember(member.userId)} aria-label="Remove">×</button>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	</section>
+		<section class="section">
+			<SectionHeading>Members</SectionHeading>
+			<div class="add-row">
+				<Button variant="secondary" size="sm" onclick={shareInvite} disabled={sharingLink}>
+					{sharingLink ? 'Generating…' : 'Copy invite link'}
+				</Button>
+			</div>
+			{#if memberError}<InlineError>{memberError}</InlineError>{/if}
+			{#if members.length === 0}
+				<EmptyState variant="inline">No members yet.</EmptyState>
+			{:else}
+				<ul class="list">
+					{#each members as member (member.userId)}
+						<li>
+							<Card compact>
+								<div class="row">
+									<span class="member-id">{member.userId}</span>
+									<Button variant="icon" onclick={() => removeMember(member.userId)} aria-label="Remove">×</Button>
+								</div>
+							</Card>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
 	{/if}
 
+	<!-- Groups -->
 	<section class="section">
-		<h2>Groups</h2>
-		<div class="add-form">
-			<input
-				bind:value={newGroupTitle}
-				placeholder="New group title…"
-				maxlength="200"
-				onkeydown={(e) => e.key === 'Enter' && createGroupHere()}
-			/>
-			<button onclick={createGroupHere} disabled={addingGroup || !newGroupTitle.trim()}>Create here</button>
+		<SectionHeading>Groups</SectionHeading>
+		<div class="add-row">
+			<TextInput bind:value={newGroupTitle} placeholder="New group…" maxlength={200} size="sm"
+				onkeydown={(e) => e.key === 'Enter' && createGroupHere()} />
+			<Button variant="primary" size="sm" onclick={createGroupHere} disabled={addingGroup || !newGroupTitle.trim()}>
+				Create
+			</Button>
 		</div>
 		{#if groups.length === 0}
-			<p class="empty">No groups in this space.</p>
+			<EmptyState variant="inline">No groups in this space.</EmptyState>
 		{:else}
-			<ul class="group-list">
+			<ul class="list">
 				{#each groups as group (group.id)}
-					<li class="group-item">
-						<a href="/groups/{group.id}" class="group-link">{group.title}</a>
+					<li>
+						<Card accent="group" compact>
+							<a href="/groups/{group.id}" class="group-link">{group.title}</a>
+						</Card>
 					</li>
 				{/each}
 			</ul>
@@ -164,130 +196,57 @@
 {/if}
 
 <style>
-	.state { text-align: center; color: #888; padding: 2rem 0; }
-	.state.error { color: #f87171; }
-
 	.header {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		margin-bottom: 2rem;
+		gap: var(--space-3);
+		margin-bottom: var(--space-8);
+		flex-wrap: wrap;
 	}
 
-	h1 {
+	.title {
 		flex: 1;
 		font-size: 1.5rem;
 		font-weight: 700;
-	}
-
-	.title-input {
-		flex: 1;
-		padding: 0.4rem 0.75rem;
-		background: #16213e;
-		border: 1px solid #4f46e5;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 1.1rem;
-	}
-
-	button {
-		padding: 0.4rem 0.9rem;
-		background: #4f46e5;
-		border: none;
-		border-radius: 6px;
-		color: #fff;
-		cursor: pointer;
-		font-size: 0.85rem;
-	}
-
-	button:disabled { opacity: 0.4; cursor: default; }
-
-	button.secondary {
-		background: #2a2a4a;
+		color: var(--color-text-primary);
 	}
 
 	.section {
-		margin-bottom: 2rem;
+		margin-bottom: var(--space-8);
 	}
 
-	h2 {
-		font-size: 1rem;
-		font-weight: 600;
-		color: #888;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin-bottom: 0.75rem;
-	}
-
-	.add-form {
+	.add-row {
 		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
+		gap: var(--space-2);
+		margin-bottom: var(--space-3);
+		align-items: center;
 	}
 
-	.add-form input {
-		flex: 1;
-		padding: 0.5rem 0.75rem;
-		background: #16213e;
-		border: 1px solid #2a2a4a;
-		border-radius: 6px;
-		color: inherit;
-		font-size: 0.9rem;
-	}
+	.add-row :global(.input) { flex: 1; }
 
-	.empty { color: #888; font-size: 0.9rem; }
-
-	.member-list {
+	.list {
 		list-style: none;
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: var(--space-2);
 	}
 
-	.member-item {
+	.row {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.6rem 1rem;
-		background: #16213e;
-		border-radius: 6px;
+		gap: var(--space-3);
 	}
 
 	.member-id {
 		flex: 1;
-		font-size: 0.9rem;
 		font-family: monospace;
-		color: #a5b4fc;
-	}
-
-	.del {
-		background: transparent;
-		border: none;
-		color: #888;
-		cursor: pointer;
-		font-size: 1.2rem;
-		line-height: 1;
-		padding: 0 0.25rem;
-	}
-
-	.del:hover { color: #f87171; }
-
-	.group-list {
-		list-style: none;
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
-
-	.group-item {
-		padding: 0.6rem 1rem;
-		background: #16213e;
-		border-radius: 6px;
-		border-left: 3px solid #818cf8;
+		font-size: var(--font-size-base);
+		color: var(--color-accent-text);
 	}
 
 	.group-link {
-		font-size: 0.9rem;
+		font-size: var(--font-size-base);
 		font-weight: 500;
+		color: var(--color-text-primary);
 	}
 </style>

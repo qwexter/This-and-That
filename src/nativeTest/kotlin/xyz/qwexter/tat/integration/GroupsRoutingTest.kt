@@ -29,12 +29,12 @@ class GroupsRoutingTest {
     @Test
     fun `GET groups returns own groups`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Alice Group"))
         }
 
-        val groups = client.get("groups") { header("X-User-Id", "alice") }.body<List<ActiveGroup>>()
+        val groups = client.get("groups") { header("X-Auth-Request-User", "alice") }.body<List<ActiveGroup>>()
         assertEquals(1, groups.size)
         assertEquals("Alice Group", groups.single().title)
     }
@@ -42,36 +42,36 @@ class GroupsRoutingTest {
     @Test
     fun `GET groups does not return other user's private groups`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Alice Private"))
         }
 
-        val groups = client.get("groups") { header("X-User-Id", "bob") }.body<List<ActiveGroup>>()
+        val groups = client.get("groups") { header("X-Auth-Request-User", "bob") }.body<List<ActiveGroup>>()
         assertTrue(groups.isEmpty())
     }
 
     @Test
     fun `GET groups includes shared-space groups for member`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Team"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
         client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Shared Group", spaceId = spaceId))
         }
 
-        val groups = client.get("groups") { header("X-User-Id", "bob") }.body<List<ActiveGroup>>()
+        val groups = client.get("groups") { header("X-Auth-Request-User", "bob") }.body<List<ActiveGroup>>()
         assertEquals(1, groups.size)
         assertEquals("Shared Group", groups.single().title)
     }
@@ -85,43 +85,43 @@ class GroupsRoutingTest {
 
     @Test
     fun `GET group by id returns 404 for unknown id`() = dbApp(authMode = AuthMode.HEADER) {
-        val response = client.get("groups/no-such-id") { header("X-User-Id", "alice") }
+        val response = client.get("groups/no-such-id") { header("X-Auth-Request-User", "alice") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
     fun `GET group by id returns 404 for another user's private group`() = dbApp(authMode = AuthMode.HEADER) {
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Alice Private"))
         }.body<ActiveGroup>().id
 
-        val response = client.get("groups/$groupId") { header("X-User-Id", "bob") }
+        val response = client.get("groups/$groupId") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
     fun `GET group by id returns 200 for shared-space group where caller is member`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Team"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Shared", spaceId = spaceId))
         }.body<ActiveGroup>().id
 
-        val response = client.get("groups/$groupId") { header("X-User-Id", "bob") }
+        val response = client.get("groups/$groupId") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("Shared", response.body<ActiveGroup>().title)
     }
@@ -131,12 +131,12 @@ class GroupsRoutingTest {
     @Test
     fun `POST groups without spaceId goes to private space`() = dbApp(authMode = AuthMode.HEADER) {
         val group = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "My Group"))
         }.also { assertEquals(HttpStatusCode.Created, it.status) }.body<ActiveGroup>()
 
-        val privateSpaceId = client.get("spaces") { header("X-User-Id", "alice") }
+        val privateSpaceId = client.get("spaces") { header("X-Auth-Request-User", "alice") }
             .body<List<ActiveSpace>>().single { it.isPrivate }.id
         assertEquals(privateSpaceId, group.spaceId)
     }
@@ -144,13 +144,13 @@ class GroupsRoutingTest {
     @Test
     fun `POST groups with explicit spaceId goes to that space`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Project"))
         }.body<ActiveSpace>().id
 
         val group = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Sprint 1", spaceId = spaceId))
         }.body<ActiveGroup>()
@@ -161,7 +161,7 @@ class GroupsRoutingTest {
     @Test
     fun `POST groups with blank title returns 400`() = dbApp(authMode = AuthMode.HEADER) {
         val response = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "  "))
         }
@@ -182,13 +182,13 @@ class GroupsRoutingTest {
     @Test
     fun `PATCH groups renames group`() = dbApp(authMode = AuthMode.HEADER) {
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Old Name"))
         }.body<ActiveGroup>().id
 
         val updated = client.patch("groups/$groupId") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(UpdateGroup(title = "New Name"))
         }.also { assertEquals(HttpStatusCode.OK, it.status) }.body<ActiveGroup>()
@@ -199,19 +199,19 @@ class GroupsRoutingTest {
     @Test
     fun `PATCH groups assigns group to space`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Work"))
         }.body<ActiveSpace>().id
 
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "My Group"))
         }.body<ActiveGroup>().id
 
         val updated = client.patch("groups/$groupId") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(UpdateGroup(spaceId = spaceId))
         }.body<ActiveGroup>()
@@ -222,24 +222,24 @@ class GroupsRoutingTest {
     @Test
     fun `PATCH groups clearSpace moves group back to private space`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Work"))
         }.body<ActiveSpace>().id
 
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "My Group", spaceId = spaceId))
         }.body<ActiveGroup>().id
 
         val updated = client.patch("groups/$groupId") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(UpdateGroup(clearSpace = true))
         }.body<ActiveGroup>()
 
-        val privateSpaceId = client.get("spaces") { header("X-User-Id", "alice") }
+        val privateSpaceId = client.get("spaces") { header("X-Auth-Request-User", "alice") }
             .body<List<ActiveSpace>>().single { it.isPrivate }.id
         assertEquals(privateSpaceId, updated.spaceId)
     }
@@ -247,13 +247,13 @@ class GroupsRoutingTest {
     @Test
     fun `PATCH groups returns 404 for another user's group`() = dbApp(authMode = AuthMode.HEADER) {
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Alice Group"))
         }.body<ActiveGroup>().id
 
         val response = client.patch("groups/$groupId") {
-            header("X-User-Id", "bob")
+            header("X-Auth-Request-User", "bob")
             contentType(ContentType.Application.Json)
             setBody(UpdateGroup(title = "Hijacked"))
         }
@@ -265,34 +265,34 @@ class GroupsRoutingTest {
     @Test
     fun `DELETE groups returns 204 and group no longer appears in list`() = dbApp(authMode = AuthMode.HEADER) {
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Temp"))
         }.body<ActiveGroup>().id
 
         assertEquals(HttpStatusCode.NoContent, client.delete("groups/$groupId") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
         }.status)
 
-        val groups = client.get("groups") { header("X-User-Id", "alice") }.body<List<ActiveGroup>>()
+        val groups = client.get("groups") { header("X-Auth-Request-User", "alice") }.body<List<ActiveGroup>>()
         assertTrue(groups.none { it.id == groupId })
     }
 
     @Test
     fun `DELETE groups returns 404 for another user's group`() = dbApp(authMode = AuthMode.HEADER) {
         val groupId = client.post("groups") {
-            header("X-User-Id", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Alice Group"))
         }.body<ActiveGroup>().id
 
-        val response = client.delete("groups/$groupId") { header("X-User-Id", "bob") }
+        val response = client.delete("groups/$groupId") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
     fun `DELETE groups returns 404 for unknown id`() = dbApp(authMode = AuthMode.HEADER) {
-        val response = client.delete("groups/no-such-id") { header("X-User-Id", "alice") }
+        val response = client.delete("groups/no-such-id") { header("X-Auth-Request-User", "alice") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 }
