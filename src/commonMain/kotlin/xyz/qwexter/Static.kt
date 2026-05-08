@@ -23,8 +23,7 @@ fun Application.configureStatic(staticPath: String) {
         get("{...}") {
             call.addCORSHeaders()
 
-            val segments = call.parameters.getAll("...") ?: emptyList()
-            val relative = segments.joinToString("/")
+            val relative = call.request.local.uri.substringBefore('?').trimStart('/')
             val target = (base / relative).normalized()
 
             if (!target.toString().startsWith(base.toString())) {
