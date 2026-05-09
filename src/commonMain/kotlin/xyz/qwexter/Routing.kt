@@ -4,6 +4,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.uri
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.resources.Resources
 import io.ktor.server.response.respondText
@@ -35,6 +37,12 @@ fun Application.configureRouting(
             call.respondText(text = cause.message ?: "Bad request", status = HttpStatusCode.BadRequest)
         }
         exception<Throwable> { call, cause ->
+            Log.error(
+                "unhandled exception",
+                "method" to call.request.httpMethod.value,
+                "uri" to call.request.uri,
+                "error" to cause.toString(),
+            )
             call.respondText(text = "500: $cause", status = HttpStatusCode.InternalServerError)
         }
     }
