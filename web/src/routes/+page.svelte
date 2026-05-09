@@ -13,6 +13,8 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import { connection } from '$lib/connection.svelte';
 	import { features } from '$lib/features';
+	import CheckCircle from '$lib/ui/CheckCircle.svelte';
+	import { parseTaskInput } from '$lib/parseTaskInput';
 
 	// ── Data ────────────────────────────────────────────────────────────
 	let spaces = $state<Space[]>([]);
@@ -127,6 +129,14 @@
 	let taskPriority = $state<TaskPriority>('Low');
 	let taskGroupId = $state('');
 
+	const allGroupTitles = $derived(groups.map(g => g.title));
+	const parsedTask = $derived(parseTaskInput(taskName, allGroupTitles));
+	const parsedGroupId = $derived(
+		parsedTask.groupName
+			? (groups.find(g => g.title === parsedTask.groupName)?.id ?? '')
+			: ''
+	);
+
 	// record form
 	let recordTitle = $state('');
 	let recordContent = $state('');
@@ -168,17 +178,20 @@
 	function closeFab() { fabMode = 'closed'; fabError = null; }
 
 	async function submitTask() {
-		if (!taskName.trim()) { fabError = 'Name required'; return; }
-		if (requiresGroup && !taskGroupId) { fabError = 'Select a group (required for shared spaces)'; return; }
+		const effectiveName = parsedTask.name || taskName.trim();
+		if (!effectiveName) { fabError = 'Name required'; return; }
+		const effectivePriority = parsedTask.priority ?? taskPriority;
+		const effectiveGroupId = parsedGroupId || taskGroupId || null;
+		if (requiresGroup && !effectiveGroupId) { fabError = 'Select a group (required for shared spaces)'; return; }
 		fabBusy = true;
 		try {
 			const task = await api.createTask({
-				name: taskName.trim(),
-				priority: taskPriority,
+				name: effectiveName,
+				priority: effectivePriority,
 				description: null,
 				status: null,
 				deadline: null,
-				groupId: taskGroupId || null,
+				groupId: effectiveGroupId,
 			});
 			closeFab();
 			toast.success('Task created');
@@ -248,6 +261,22 @@
 		}
 	}
 
+	// ── Inline complete ─────────────────────────────────────────────────
+	// Tracks optimistic status overrides for feed task children
+	let taskStatusOverrides = $state<Record<string, 'Todo' | 'Done'>>({});
+
+	async function toggleFeedTask(id: string, currentStatus: 'Todo' | 'Done') {
+		const next = currentStatus === 'Done' ? 'Todo' : 'Done';
+		taskStatusOverrides = { ...taskStatusOverrides, [id]: next };
+		try {
+			await api.updateTask(id, { status: next });
+		} catch {
+			// revert optimistic update
+			taskStatusOverrides = { ...taskStatusOverrides, [id]: currentStatus };
+			toast.error('Failed to update task');
+		}
+	}
+
 	// ── Helpers ──────────────────────────────────────────────────────────
 	function formatDate(iso: string): string {
 		const diff = Date.now() - new Date(iso).getTime();
@@ -314,9 +343,13 @@
 						<ul class="children">
 							{#each entry.children as child (child.kind + child.id)}
 								{#if child.kind === 'task'}
+									{@const effectiveStatus = taskStatusOverrides[child.id] ?? child.status}
 									<li class="child" data-priority={features.priority ? child.priority.toLowerCase() : ''}>
-										<span class="child-icon">✓</span>
-										<a href="/tasks/{child.id}" class="child-name" class:done={child.status === 'Done'}>{child.name}</a>
+										<CheckCircle
+											checked={effectiveStatus === 'Done'}
+											onclick={() => toggleFeedTask(child.id, effectiveStatus)}
+										/>
+										<a href="/tasks/{child.id}" class="child-name" class:done={effectiveStatus === 'Done'}>{child.name}</a>
 										{#if features.priority}<Badge variant="priority-{child.priority.toLowerCase() as 'high'|'medium'|'low'}">{child.priority}</Badge>{/if}
 										{#if features.deadline && child.deadline}
 											<span class="child-deadline">{child.deadline.slice(0, 10)}</span>
@@ -339,12 +372,15 @@
 				</Card>
 
 			{:else if entry.kind === 'task'}
+				{@const effectiveStatus = taskStatusOverrides[entry.id] ?? entry.status}
 				<Card accent={features.priority ? taskAccent(entry.priority) : 'none'}>
 					<div class="card-header">
-						<Badge variant="kind-task">task</Badge>
-						<a href="/tasks/{entry.id}" class="card-title" class:done={entry.status === 'Done'}>{entry.name}</a>
+						<CheckCircle
+							checked={effectiveStatus === 'Done'}
+							onclick={() => toggleFeedTask(entry.id, effectiveStatus)}
+						/>
+						<a href="/tasks/{entry.id}" class="card-title" class:done={effectiveStatus === 'Done'}>{entry.name}</a>
 						{#if features.priority}<Badge variant="priority-{entry.priority.toLowerCase() as 'high'|'medium'|'low'}">{entry.priority}</Badge>{/if}
-						<Badge variant={entry.status === 'Done' ? 'status-done' : 'status-todo'}>{entry.status}</Badge>
 						{#if features.deadline && entry.deadline}
 							<span class="card-deadline">{entry.deadline.slice(0, 10)}</span>
 						{/if}
@@ -424,10 +460,16 @@
 						<Button variant="secondary" onclick={() => openFab('menu')}>Back</Button>
 					</div>
 				{:else}
-					<TextInput bind:value={taskName} placeholder="Task name" maxlength={200} autofocus
+					<TextInput bind:value={taskName} placeholder="Task name  #group  !priority" maxlength={200} autofocus
 						onkeydown={(e) => e.key === 'Enter' && submitTask()} />
-					{#if features.priority}<Select bind:value={taskPriority} options={priorityOptions} />{/if}
-					{#if requiresGroup}
+					{#if parsedTask.groupName || parsedTask.priority}
+						<div class="parse-chips">
+							{#if parsedTask.groupName}<span class="chip chip-group">#{parsedTask.groupName}</span>{/if}
+							{#if parsedTask.priority}<span class="chip chip-priority chip-{parsedTask.priority.toLowerCase()}">{parsedTask.priority}</span>{/if}
+						</div>
+					{/if}
+					{#if features.priority && !parsedTask.priority}<Select bind:value={taskPriority} options={priorityOptions} />{/if}
+					{#if requiresGroup && !parsedGroupId}
 						<Select
 							bind:value={taskGroupId}
 							options={activeSpaceGroups.map(g => ({ value: g.id, label: g.title }))}
@@ -641,10 +683,7 @@
 		color: var(--color-text-faint);
 	}
 
-	.child[data-priority='high']   .child-icon { color: var(--color-priority-high); }
-	.child[data-priority='medium'] .child-icon { color: var(--color-priority-medium); }
-	.child[data-priority='low']    .child-icon { color: var(--color-priority-low); }
-	.record-child .child-icon.rec  { color: var(--color-kind-record-border); }
+	.record-child .child-icon.rec { color: var(--color-kind-record-border); }
 
 	.child-name {
 		flex: 1;
@@ -819,5 +858,36 @@
 	.form-actions {
 		display: flex;
 		gap: var(--space-2);
+	}
+
+	/* ── Parse chips ─────────────────────────────────────────────── */
+	.parse-chips {
+		display: flex;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.2rem 0.6rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--font-size-sm);
+		font-weight: 500;
+		animation: chip-pop 0.15s ease-out;
+	}
+
+	.chip-group {
+		background: var(--color-kind-group-bg);
+		color: var(--color-kind-group-text);
+	}
+
+	.chip-priority.chip-high   { background: color-mix(in srgb, var(--color-priority-high) 20%, transparent);   color: var(--color-priority-high); }
+	.chip-priority.chip-medium { background: color-mix(in srgb, var(--color-priority-medium) 20%, transparent); color: var(--color-priority-medium); }
+	.chip-priority.chip-low    { background: color-mix(in srgb, var(--color-priority-low) 20%, transparent);    color: var(--color-priority-low); }
+
+	@keyframes chip-pop {
+		from { transform: scale(0.75); opacity: 0; }
+		to   { transform: scale(1);    opacity: 1; }
 	}
 </style>

@@ -25,14 +25,17 @@
 
 <style>
 	.check {
-		width: 20px;
-		height: 20px;
+		width: 24px;
+		height: 24px;
+		min-width: 24px;
 		border-radius: var(--radius-pill);
 		border: 2px solid var(--color-accent);
 		background: transparent;
 		cursor: pointer;
 		flex-shrink: 0;
-		transition: background 0.1s;
+		transition: background 0.15s, transform 0.15s;
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.check.checked {
@@ -41,5 +44,9 @@
 
 	.check:hover:not(.checked) {
 		background: var(--color-accent-subtle);
+	}
+
+	.check:active {
+		transform: scale(0.88);
 	}
 </style>

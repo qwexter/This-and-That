@@ -4,6 +4,7 @@
 	import { api } from '$lib/api';
 	import type { Group, Space, Task, Record, AddGroupItem } from '$lib/types';
 	import BackLink from '$lib/ui/BackLink.svelte';
+	import CheckCircle from '$lib/ui/CheckCircle.svelte';
 	import Badge from '$lib/ui/Badge.svelte';
 	import Button from '$lib/ui/Button.svelte';
 	import Card from '$lib/ui/Card.svelte';
@@ -64,11 +65,12 @@
 		}
 	}
 
-	// add panel
+	// add panel / FAB
 	type AddMode = 'none' | 'newTask' | 'newRecord' | 'existing';
 	let addMode = $state<AddMode>('none');
 	let addError = $state<string | null>(null);
 	let adding = $state(false);
+	let fabOpen = $state(false);
 
 	let newTaskName = $state('');
 	let newTaskDesc = $state('');
@@ -76,6 +78,23 @@
 	let newRecordContent = $state('');
 	let existingKind = $state<'task' | 'record'>('task');
 	let selectedExistingId = $state('');
+
+	function openFab(mode: AddMode) {
+		fabOpen = true;
+		addMode = mode;
+		addError = null;
+		newTaskName = '';
+		newTaskDesc = '';
+		newRecordTitle = '';
+		newRecordContent = '';
+		selectedExistingId = '';
+	}
+
+	function closeFab() {
+		fabOpen = false;
+		addMode = 'none';
+		addError = null;
+	}
 
 	const existingTaskOptions = $derived([
 		{ value: '', label: 'Select a task…' },
@@ -156,6 +175,17 @@
 		goto('/groups');
 	}
 
+	async function toggleTaskDone(task: Task) {
+		const next = task.status === 'Done' ? 'Todo' : 'Done';
+		tasks = tasks.map(t => t.id === task.id ? { ...t, status: next } : t);
+		try {
+			await api.updateTask(task.id, { status: next });
+		} catch {
+			tasks = tasks.map(t => t.id === task.id ? { ...t, status: task.status } : t);
+			toast.error('Failed to update task');
+		}
+	}
+
 	async function removeTask(taskId: string) {
 		await api.updateTask(taskId, { clearGroup: true });
 		tasks = tasks.filter((t) => t.id !== taskId);
@@ -169,13 +199,7 @@
 	}
 
 	function cancelAdd() {
-		addMode = 'none';
-		addError = null;
-		newTaskName = '';
-		newTaskDesc = '';
-		newRecordTitle = '';
-		newRecordContent = '';
-		selectedExistingId = '';
+		closeFab();
 	}
 
 	async function submitAdd() {
@@ -198,7 +222,7 @@
 		adding = true;
 		try {
 			await api.addGroupItems(id, { items });
-			cancelAdd();
+			closeFab();
 			toast.success('Item added to group');
 			await load();
 		} catch (e) {
@@ -253,27 +277,47 @@
 		/>
 	</div>
 
-	<!-- Add items panel -->
-	{#if addMode === 'none'}
-		<div class="add-bar">
-			<Button variant="ghost" size="sm" onclick={() => addMode = 'newTask'}>+ New task</Button>
-			<Button variant="ghost" size="sm" onclick={() => addMode = 'newRecord'}>+ New record</Button>
-			<Button variant="secondary" size="sm" onclick={() => addMode = 'existing'}>+ Add existing</Button>
-		</div>
-	{:else}
-		<div class="add-panel">
-			{#if addMode === 'newTask'}
-				<p class="panel-title">New task</p>
+	<!-- FAB bottom sheet -->
+	{#if fabOpen}
+		<button class="fab-backdrop" onclick={closeFab} aria-label="Close"></button>
+		<div class="fab-sheet" role="dialog">
+			{#if addMode === 'none'}
+				<div class="fab-menu">
+					<button class="fab-option task" onclick={() => openFab('newTask')}>
+						<span class="fab-option-icon">✓</span>
+						<span>Task</span>
+					</button>
+					<button class="fab-option record" onclick={() => openFab('newRecord')}>
+						<span class="fab-option-icon">≡</span>
+						<span>Record</span>
+					</button>
+					<button class="fab-option existing" onclick={() => openFab('existing')}>
+						<span class="fab-option-icon">⊞</span>
+						<span>Existing</span>
+					</button>
+				</div>
+			{:else if addMode === 'newTask'}
+				<p class="sheet-title">New task</p>
 				<TextInput bind:value={newTaskName} placeholder="Task name" maxlength={200} autofocus
-					onkeydown={(e) => { if (e.key === 'Enter') submitAdd(); if (e.key === 'Escape') cancelAdd(); }} />
+					onkeydown={(e) => { if (e.key === 'Enter') submitAdd(); if (e.key === 'Escape') closeFab(); }} />
 				<Textarea bind:value={newTaskDesc} placeholder="Description (optional)" rows={2} />
+				{#if addError}<InlineError>{addError}</InlineError>{/if}
+				<div class="sheet-actions">
+					<Button variant="primary" onclick={submitAdd} disabled={adding}>{adding ? 'Adding…' : 'Add task'}</Button>
+					<Button variant="secondary" onclick={() => openFab('none')}>Back</Button>
+				</div>
 			{:else if addMode === 'newRecord'}
-				<p class="panel-title">New record</p>
+				<p class="sheet-title">New record</p>
 				<TextInput bind:value={newRecordTitle} placeholder="Title" maxlength={200} autofocus
-					onkeydown={(e) => { if (e.key === 'Enter') submitAdd(); if (e.key === 'Escape') cancelAdd(); }} />
+					onkeydown={(e) => { if (e.key === 'Enter') submitAdd(); if (e.key === 'Escape') closeFab(); }} />
 				<Textarea bind:value={newRecordContent} placeholder="Content (optional)" rows={2} />
+				{#if addError}<InlineError>{addError}</InlineError>{/if}
+				<div class="sheet-actions">
+					<Button variant="primary" onclick={submitAdd} disabled={adding}>{adding ? 'Adding…' : 'Add record'}</Button>
+					<Button variant="secondary" onclick={() => openFab('none')}>Back</Button>
+				</div>
 			{:else if addMode === 'existing'}
-				<p class="panel-title">Add existing</p>
+				<p class="sheet-title">Add existing</p>
 				<div class="kind-toggle">
 					<Button variant="secondary" size="sm" active={existingKind === 'task'}
 						onclick={() => { existingKind = 'task'; selectedExistingId = ''; }}>Tasks</Button>
@@ -293,18 +337,19 @@
 						<Select bind:value={selectedExistingId} options={existingRecordOptions} />
 					{/if}
 				{/if}
+				{#if addError}<InlineError>{addError}</InlineError>{/if}
+				<div class="sheet-actions">
+					<Button variant="primary" onclick={submitAdd} disabled={adding || !selectedExistingId}>{adding ? 'Adding…' : 'Add'}</Button>
+					<Button variant="secondary" onclick={() => openFab('none')}>Back</Button>
+				</div>
 			{/if}
-
-			{#if addError}<InlineError>{addError}</InlineError>{/if}
-
-			<div class="panel-actions">
-				<Button variant="primary" size="sm" onclick={submitAdd} disabled={adding}>
-					{adding ? 'Adding…' : 'Add'}
-				</Button>
-				<Button variant="secondary" size="sm" onclick={cancelAdd} disabled={adding}>Cancel</Button>
-			</div>
 		</div>
 	{/if}
+
+	<!-- FAB trigger -->
+	<button class="group-fab" onclick={() => openFab('newTask')} aria-label="Add to group">
+		<span class="group-fab-icon" class:open={fabOpen}>+</span>
+	</button>
 
 	<!-- Tasks -->
 	<section class="section">
@@ -317,9 +362,9 @@
 					<li>
 						<Card accent={task.priority === 'High' ? 'task-high' : task.priority === 'Medium' ? 'task-medium' : 'task-low'} compact>
 							<div class="item-row">
+								<CheckCircle checked={task.status === 'Done'} onclick={() => toggleTaskDone(task)} />
 								<a href="/tasks/{task.id}" class="item-name" class:done={task.status === 'Done'}>{task.name}</a>
 								<Badge variant="priority-{task.priority.toLowerCase() as 'high'|'medium'|'low'}">{task.priority}</Badge>
-								<Badge variant={task.status === 'Done' ? 'status-done' : 'status-todo'}>{task.status}</Badge>
 								<Button variant="icon" onclick={() => removeTask(task.id)} title="Remove from group">↗</Button>
 							</div>
 						</Card>
@@ -382,38 +427,129 @@
 		color: var(--color-text-muted);
 	}
 
-	.add-bar {
-		display: flex;
-		gap: var(--space-2);
-		margin-bottom: var(--space-5);
-		flex-wrap: wrap;
-	}
-
-	.add-panel {
-		background: var(--color-bg-sunken);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: var(--space-4);
-		margin-bottom: var(--space-5);
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-
-	.panel-title {
-		font-size: var(--font-size-base);
-		font-weight: 600;
-		color: var(--color-accent-text);
-	}
-
 	.kind-toggle {
 		display: flex;
 		gap: var(--space-2);
 	}
 
-	.panel-actions {
+	/* ── FAB ── */
+	.group-fab {
+		position: fixed;
+		bottom: 1.75rem;
+		right: 1.75rem;
+		width: 56px;
+		height: 56px;
+		border-radius: var(--radius-pill);
+		background: var(--color-accent);
+		color: #fff;
+		border: none;
+		cursor: pointer;
+		font-size: 1.75rem;
+		line-height: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+		z-index: 110;
+		transition: background 0.15s;
+		touch-action: manipulation;
+	}
+
+	.group-fab:hover { background: var(--color-accent-hover); }
+
+	.group-fab-icon {
+		display: block;
+		transition: transform 0.2s;
+		line-height: 1;
+	}
+
+	.group-fab-icon.open { transform: rotate(45deg); }
+
+	.fab-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0,0,0,0.45);
+		border: none;
+		z-index: 105;
+		cursor: default;
+	}
+
+	.fab-sheet {
+		position: fixed;
+		bottom: 0;
+		left: 50%;
+		transform: translateX(-50%);
+		width: min(640px, 100vw);
+		background: var(--color-bg-surface);
+		border-top: 1px solid var(--color-border);
+		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+		padding: var(--space-5) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
+		z-index: 106;
+		animation: slide-up 0.18s ease-out;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+	}
+
+	.sheet-title {
+		font-size: var(--font-size-base);
+		font-weight: 600;
+		color: var(--color-text-primary);
+		margin: 0;
+	}
+
+	.sheet-actions {
 		display: flex;
 		gap: var(--space-2);
+	}
+
+	.fab-menu {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-3);
+	}
+
+	.fab-option {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-4) var(--space-2);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-bg-sunken);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		font-size: var(--font-size-sm);
+		font-family: inherit;
+		transition: background 0.1s;
+		touch-action: manipulation;
+	}
+
+	.fab-option:hover { background: var(--color-bg-elevated); }
+
+	.fab-option-icon {
+		font-size: 1.4rem;
+		line-height: 1;
+	}
+
+	.fab-option.task     .fab-option-icon { color: var(--color-kind-task-text); }
+	.fab-option.record   .fab-option-icon { color: var(--color-kind-record-text); }
+	.fab-option.existing .fab-option-icon { color: var(--color-kind-group-text); }
+
+	@media (max-width: 640px) {
+		.group-fab {
+			bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px) + var(--space-4));
+		}
+		.fab-sheet {
+			bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+			padding-bottom: var(--space-5);
+		}
+	}
+
+	@keyframes slide-up {
+		from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+		to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
 	}
 
 	.section {
