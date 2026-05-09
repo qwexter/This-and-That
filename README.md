@@ -29,6 +29,7 @@ TaT is a solution for small task and record management, like a todo-list with a 
 | [Content Negotiation](https://start.ktor.io/p/content-negotiation)                | Provides automatic content conversion according to Content-Type and Accept headers |
 | [kotlinx.serialization](https://start.ktor.io/p/kotlinx-serialization)            | Handles JSON serialization using kotlinx.serialization library                     |
 | [SQLDelight](https://sqldelight.github.io/sqldelight/2.3.2/multiplatform_sqlite/) | Type-safe SQL with native SQLite driver, no JVM required                           |
+| Request Logging (custom)                                                           | Native-compatible plugin — logs every request as JSON line to stdout               |
 
 ## Building & Running
 

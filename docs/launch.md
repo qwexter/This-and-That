@@ -284,3 +284,55 @@ No self-registration. Admin adds users manually:
 |-------------|----------------------|-------------|
 | `none` | Hardcoded `dev-user` | Local dev, no auth needed |
 | `header` | `X-User-Id` header from Caddy | Auth-test + prod behind Authelia |
+
+---
+
+## Logging
+
+Binary logs to **stdout** as JSON lines. No external logging agent needed.
+
+### Log format
+
+Every request:
+```json
+{"level":"INFO","msg":"request","method":"GET","uri":"/tasks","status":200}
+```
+
+Unhandled 500 errors:
+```json
+{"level":"ERROR","msg":"unhandled exception","method":"POST","uri":"/tasks","error":"..."}
+```
+
+### systemd deployment
+
+Run as a systemd service — journald captures stdout automatically.
+
+```ini
+# /etc/systemd/system/tat.service
+[Unit]
+Description=TaT backend
+After=network.target
+
+[Service]
+ExecStart=/opt/tat/todo.kexe
+Environment=AUTH_MODE=header
+Environment=DB_PATH=/var/lib/tat/tat.db
+Environment=STATIC_PATH=/opt/tat/web
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```sh
+sudo systemctl enable --now tat
+```
+
+### Useful journalctl commands
+
+```sh
+journalctl -u tat.service -f                        # live tail
+journalctl -u tat.service --since today             # today's logs
+journalctl -u tat.service -g '"level":"ERROR"'      # errors only
+journalctl -u tat.service -g '"uri":"/tasks"'       # filter by route
+```
