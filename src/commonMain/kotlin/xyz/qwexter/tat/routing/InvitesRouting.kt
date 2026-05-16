@@ -90,22 +90,12 @@ private suspend fun ApplicationCall.handleAcceptInvite(
 ) {
     val callerId = resolveOwnerId(authMode) ?: return
     val token = parameters["token"]!!
-    val invite = invitesRepository.consumeInvite(token)
-    if (invite == null) {
-        respond(HttpStatusCode.Gone)
-        return
-    }
+    val invite = invitesRepository.getInvite(token) ?: run { respond(HttpStatusCode.Gone); return }
     val space = spacesRepository.getSpaceById(invite.spaceId)
+    if (space == null || space.deletedAt != null) { respond(HttpStatusCode.Gone); return }
+    val consumed = invitesRepository.consumeInvite(token) ?: run { respond(HttpStatusCode.Gone); return }
     when {
-        space == null || space.deletedAt != null -> {
-            respond(HttpStatusCode.Gone)
-        }
-        space.ownerId == callerId -> {
-            respond(HttpStatusCode.OK)
-        }
-        else -> {
-            spacesRepository.addMember(spaceId = invite.spaceId, userId = callerId)
-            respond(HttpStatusCode.OK)
-        }
+        space.ownerId == callerId -> respond(HttpStatusCode.OK)
+        else -> { spacesRepository.addMember(spaceId = consumed.spaceId, userId = callerId); respond(HttpStatusCode.OK) }
     }
 }
