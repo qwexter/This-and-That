@@ -52,7 +52,7 @@ fun Application.groupsRouting(
             patch("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
                 val callerId = call.resolveOwnerId(authMode) ?: return@patch
-                call.patchGroup(groupsRepository, spacesRepository, callerId)
+                call.patchGroup(groupsRepository, callerId)
             }
             delete("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
@@ -96,7 +96,6 @@ private suspend fun ApplicationCall.postGroup(
 
 private suspend fun ApplicationCall.patchGroup(
     repo: GroupsRepository,
-    spacesRepo: SpacesRepository,
     callerId: String,
 ) {
     val groupId = GroupId(parameters["groupId"]!!)
@@ -107,15 +106,10 @@ private suspend fun ApplicationCall.patchGroup(
             throw BadRequestException("title must not exceed $TITLE_MAX_LENGTH characters")
         }
     }
-    val resolvedSpaceId = when {
-        body.spaceId != null -> SpaceId(body.spaceId)
-        body.clearSpace -> spacesRepo.getOrCreatePrivateSpace(callerId).id
-        else -> null
-    }
     val params = GroupUpdateParams(
         title = body.title?.trim(),
-        spaceId = resolvedSpaceId,
-        clearSpace = false,
+        spaceId = body.spaceId?.let { SpaceId(it) },
+        clearSpace = body.clearSpace,
     )
     val group = repo.updateGroup(ownerId = callerId, groupId = groupId, params = params)
     if (group == null) {

@@ -60,13 +60,17 @@ private class DbInvitesRepository(
     }
 
     override suspend fun consumeInvite(token: String): SpaceInvite? = withContext(dbDispatcher) {
-        val invite = db.tatDatabaseQueries.selectSpaceInviteByToken(token).executeAsOneOrNull()?.toModel()
-            ?: return@withContext null
-        val now = Clock.System.now()
-        if (invite.expiresAt != null && now > invite.expiresAt) return@withContext null
-        if (invite.maxUses != null && invite.useCount >= invite.maxUses) return@withContext null
-        db.tatDatabaseQueries.incrementSpaceInviteUseCount(token)
-        invite
+        var result: SpaceInvite? = null
+        db.tatDatabaseQueries.transaction {
+            val invite = db.tatDatabaseQueries.selectSpaceInviteByToken(token).executeAsOneOrNull()?.toModel()
+                ?: return@transaction
+            val now = Clock.System.now()
+            if (invite.expiresAt != null && now > invite.expiresAt) return@transaction
+            if (invite.maxUses != null && invite.useCount >= invite.maxUses) return@transaction
+            db.tatDatabaseQueries.incrementSpaceInviteUseCount(token)
+            result = invite.copy(useCount = invite.useCount + 1)
+        }
+        result
     }
 
     private fun generateToken(): String {

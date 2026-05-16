@@ -45,7 +45,7 @@ fun Application.configureDatabases(
         if (currentVersion == 0L) {
             TatDatabase.Schema.create(driver)
             driver.setVersion(TatDatabase.Schema.version)
-        } else {
+        } else if (currentVersion < TatDatabase.Schema.version) {
             TatDatabase.Schema.migrate(driver, currentVersion, TatDatabase.Schema.version)
             driver.setVersion(TatDatabase.Schema.version)
         }

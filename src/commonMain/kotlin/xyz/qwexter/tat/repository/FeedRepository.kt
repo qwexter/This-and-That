@@ -122,14 +122,10 @@ private class DbFeedRepository(
 
     private fun loadGroupChildren(groupIds: List<String>): Map<String, List<FeedChild>> {
         if (groupIds.isEmpty()) return emptyMap()
-        val tasks = groupIds.flatMap { gid ->
-            db.tatDatabaseQueries.selectActiveTasksByGroup(group_id = gid)
-                .executeAsList().map { gid to it.toTaskChild() }
-        }
-        val records = groupIds.flatMap { gid ->
-            db.tatDatabaseQueries.selectActiveRecordsByGroup(group_id = gid)
-                .executeAsList().map { gid to it.toRecordChild() }
-        }
+        val tasks = db.tatDatabaseQueries.selectActiveTasksByGroups(groupIds)
+            .executeAsList().map { it.group_id!! to it.toTaskChild() }
+        val records = db.tatDatabaseQueries.selectActiveRecordsByGroups(groupIds)
+            .executeAsList().map { it.group_id!! to it.toRecordChild() }
         return (tasks + records)
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, children) -> children.sortedByDescending { it.createdAt } }
