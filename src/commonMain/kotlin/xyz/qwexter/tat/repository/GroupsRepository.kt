@@ -156,14 +156,16 @@ private class DbGroupsRepository(
             return@withContext false
         }
         val now = Clock.System.now().toEpochMilliseconds()
-        db.tatDatabaseQueries.nullifyTasksGroup(updated_at = now, group_id = groupId.id)
-        db.tatDatabaseQueries.nullifyRecordsGroup(updated_at = now, group_id = groupId.id)
-        db.tatDatabaseQueries.softDeleteGroup(
-            group_deleted_at = now,
-            updated_at = now,
-            id = groupId.id,
-            owner_id = ownerId,
-        )
+        db.tatDatabaseQueries.transaction {
+            db.tatDatabaseQueries.nullifyTasksGroup(updated_at = now, group_id = groupId.id)
+            db.tatDatabaseQueries.nullifyRecordsGroup(updated_at = now, group_id = groupId.id)
+            db.tatDatabaseQueries.softDeleteGroup(
+                group_deleted_at = now,
+                updated_at = now,
+                id = groupId.id,
+                owner_id = ownerId,
+            )
+        }
         true
     }
 
@@ -172,16 +174,16 @@ private class DbGroupsRepository(
         groupId: GroupId,
         items: List<GroupItemInput>,
     ): Either<AddItemsError, List<GroupItemResult>> = withContext(dbDispatcher) {
-        for (item in items) {
-            val err = validateExistingItem(item, callerId, groupId)
-            if (err != null) return@withContext Either.Left(err)
-        }
-        val results = mutableListOf<GroupItemResult>()
-        val now = Clock.System.now().toEpochMilliseconds()
-        db.tatDatabaseQueries.transaction {
+        return@withContext db.tatDatabaseQueries.transactionWithResult {
+            for (item in items) {
+                val err = validateExistingItem(item, callerId, groupId)
+                if (err != null) return@transactionWithResult Either.Left(err)
+            }
+            val results = mutableListOf<GroupItemResult>()
+            val now = Clock.System.now().toEpochMilliseconds()
             items.forEach { results += insertItem(it, callerId, groupId, now) }
+            Either.Right(results)
         }
-        Either.Right(results)
     }
 
     private fun canAccessGroup(row: xyz.qwexter.db.Tat_group, callerId: String): Boolean {
@@ -244,6 +246,7 @@ private class DbGroupsRepository(
                 group_id = groupId.id,
                 updated_at = now,
                 id = item.taskId.id,
+                owner_id = callerId,
             )
             GroupItemResult.TaskResult(
                 db.tatDatabaseQueries.selectTaskById(item.taskId.id).executeAsOne().toTaskModel(),
@@ -254,6 +257,7 @@ private class DbGroupsRepository(
                 group_id = groupId.id,
                 updated_at = now,
                 id = item.recordId.id,
+                owner_id = callerId,
             )
             GroupItemResult.RecordResult(
                 db.tatDatabaseQueries.selectRecordById(item.recordId.id).executeAsOne().toRecordModel(),
