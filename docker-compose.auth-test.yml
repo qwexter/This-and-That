@@ -13,12 +13,12 @@ services:
       OAUTH2_PROXY_EMAIL_DOMAINS: "*"
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_COOKIE_SECRET}
       OAUTH2_PROXY_COOKIE_SECURE: "false"
-      OAUTH2_PROXY_COOKIE_NAME: _tat_auth
       # Pass Logto sub claim as X-Auth-Request-User → Ktor reads it as userId
       OAUTH2_PROXY_USER_ID_CLAIM: sub
       OAUTH2_PROXY_PASS_USER_HEADERS: "true"
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
       OAUTH2_PROXY_PASS_ACCESS_TOKEN: "false"
+      OAUTH2_PROXY_COOKIE_NAME: _tat_oauth
       # Skip auth for public invite preview endpoint
       OAUTH2_PROXY_SKIP_AUTH_ROUTES: "^/invites/[^/]+$"
       # Skip auth for static assets served by Ktor

@@ -32,7 +32,7 @@ class SpacesRoutingTest {
     @Test
     fun `POST spaces creates space and GET returns it`() = dbApp(authMode = AuthMode.HEADER) {
         val created = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "My Space"))
         }.also { assertEquals(HttpStatusCode.Created, it.status) }.body<ActiveSpace>()
@@ -41,7 +41,7 @@ class SpacesRoutingTest {
         assertEquals("My Space", created.title)
 
         val list = client.get("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
         }.body<List<ActiveSpace>>()
 
         assertEquals(1, list.size)
@@ -51,17 +51,17 @@ class SpacesRoutingTest {
     @Test
     fun `GET spaces returns only caller-accessible spaces`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Alice Space"))
         }
         client.post("spaces") {
-            header("X-Forwarded-User", "bob")
+            header("X-Auth-Request-User", "bob")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Bob Space"))
         }
 
-        val aliceSpaces = client.get("spaces") { header("X-Forwarded-User", "alice") }.body<List<ActiveSpace>>()
+        val aliceSpaces = client.get("spaces") { header("X-Auth-Request-User", "alice") }.body<List<ActiveSpace>>()
         assertEquals(1, aliceSpaces.size)
         assertEquals("Alice Space", aliceSpaces.single().title)
     }
@@ -69,25 +69,25 @@ class SpacesRoutingTest {
     @Test
     fun `GET space by id returns 404 for another user's space`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Secret"))
         }.body<ActiveSpace>().id
 
-        val response = client.get("spaces/$spaceId") { header("X-Forwarded-User", "bob") }
+        val response = client.get("spaces/$spaceId") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
     fun `PATCH space updates title`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Old Title"))
         }.body<ActiveSpace>().id
 
         val updated = client.patch("spaces/$spaceId") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(UpdateSpace(title = "New Title"))
         }.also { assertEquals(HttpStatusCode.OK, it.status) }.body<ActiveSpace>()
@@ -98,13 +98,13 @@ class SpacesRoutingTest {
     @Test
     fun `PATCH space returns 404 when space belongs to another user`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Alice Space"))
         }.body<ActiveSpace>().id
 
         val response = client.patch("spaces/$spaceId") {
-            header("X-Forwarded-User", "bob")
+            header("X-Auth-Request-User", "bob")
             contentType(ContentType.Application.Json)
             setBody(UpdateSpace(title = "Hijacked"))
         }
@@ -114,35 +114,35 @@ class SpacesRoutingTest {
     @Test
     fun `DELETE space returns 204 and space no longer appears in list`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Temp"))
         }.body<ActiveSpace>().id
 
         assertEquals(HttpStatusCode.NoContent, client.delete("spaces/$spaceId") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
         }.status)
 
-        val list = client.get("spaces") { header("X-Forwarded-User", "alice") }.body<List<ActiveSpace>>()
+        val list = client.get("spaces") { header("X-Auth-Request-User", "alice") }.body<List<ActiveSpace>>()
         assertTrue(list.isEmpty())
     }
 
     @Test
     fun `DELETE space returns 404 when space belongs to another user`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Alice Space"))
         }.body<ActiveSpace>().id
 
-        val response = client.delete("spaces/$spaceId") { header("X-Forwarded-User", "bob") }
+        val response = client.delete("spaces/$spaceId") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
     fun `POST spaces returns 400 when title is blank`() = dbApp(authMode = AuthMode.HEADER) {
         val response = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "   "))
         }
@@ -159,19 +159,19 @@ class SpacesRoutingTest {
     @Test
     fun `POST members adds member and GET members lists them`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Shared"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }.also { assertEquals(HttpStatusCode.Created, it.status) }
 
         val members = client.get("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
         }.body<List<ActiveSpaceMember>>()
 
         assertEquals(1, members.size)
@@ -181,31 +181,31 @@ class SpacesRoutingTest {
     @Test
     fun `GET members returns 404 for non-owner`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Shared"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
-        val response = client.get("spaces/$spaceId/members") { header("X-Forwarded-User", "bob") }
+        val response = client.get("spaces/$spaceId/members") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test
     fun `POST members returns 404 for non-owner`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Shared"))
         }.body<ActiveSpace>().id
 
         val response = client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "bob")
+            header("X-Auth-Request-User", "bob")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "charlie"))
         }
@@ -215,13 +215,13 @@ class SpacesRoutingTest {
     @Test
     fun `POST members returns 400 when adding yourself`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Shared"))
         }.body<ActiveSpace>().id
 
         val response = client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "alice"))
         }
@@ -231,23 +231,23 @@ class SpacesRoutingTest {
     @Test
     fun `DELETE member removes member`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Shared"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
         assertEquals(HttpStatusCode.NoContent, client.delete("spaces/$spaceId/members/bob") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
         }.status)
 
         val members = client.get("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
         }.body<List<ActiveSpaceMember>>()
         assertTrue(members.isEmpty())
     }
@@ -255,12 +255,12 @@ class SpacesRoutingTest {
     @Test
     fun `DELETE member returns 404 for non-existent member`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Shared"))
         }.body<ActiveSpace>().id
 
-        val response = client.delete("spaces/$spaceId/members/nobody") { header("X-Forwarded-User", "alice") }
+        val response = client.delete("spaces/$spaceId/members/nobody") { header("X-Auth-Request-User", "alice") }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
@@ -269,18 +269,18 @@ class SpacesRoutingTest {
     @Test
     fun `member can GET space by id`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Collab"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
-        val response = client.get("spaces/$spaceId") { header("X-Forwarded-User", "bob") }
+        val response = client.get("spaces/$spaceId") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("Collab", response.body<ActiveSpace>().title)
     }
@@ -288,18 +288,18 @@ class SpacesRoutingTest {
     @Test
     fun `member sees space in GET spaces list`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Collab"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
-        val bobSpaces = client.get("spaces") { header("X-Forwarded-User", "bob") }.body<List<ActiveSpace>>()
+        val bobSpaces = client.get("spaces") { header("X-Auth-Request-User", "bob") }.body<List<ActiveSpace>>()
         assertEquals(1, bobSpaces.size)
         assertEquals(spaceId, bobSpaces.single().id)
     }
@@ -307,19 +307,19 @@ class SpacesRoutingTest {
     @Test
     fun `member cannot PATCH space`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Collab"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
         val response = client.patch("spaces/$spaceId") {
-            header("X-Forwarded-User", "bob")
+            header("X-Auth-Request-User", "bob")
             contentType(ContentType.Application.Json)
             setBody(UpdateSpace(title = "Hijacked"))
         }
@@ -331,24 +331,24 @@ class SpacesRoutingTest {
     @Test
     fun `group assigned to space is accessible by member`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Team"))
         }.body<ActiveSpace>().id
 
         client.post("spaces/$spaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
 
         val groupId = client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Sprint 1", spaceId = spaceId))
         }.body<ActiveGroup>().id
 
-        val response = client.get("groups/$groupId") { header("X-Forwarded-User", "bob") }
+        val response = client.get("groups/$groupId") { header("X-Auth-Request-User", "bob") }
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("Sprint 1", response.body<ActiveGroup>().title)
     }
@@ -356,19 +356,19 @@ class SpacesRoutingTest {
     @Test
     fun `group can be moved into space via PATCH`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Team"))
         }.body<ActiveSpace>().id
 
         val groupId = client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "My Group"))
         }.body<ActiveGroup>().id
 
         val updated = client.patch("groups/$groupId") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(UpdateGroup(spaceId = spaceId))
         }.body<ActiveGroup>()
@@ -379,19 +379,19 @@ class SpacesRoutingTest {
     @Test
     fun `clearSpace removes group from space`() = dbApp(authMode = AuthMode.HEADER) {
         val sharedSpaceId = client.post("spaces") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpace(title = "Team"))
         }.body<ActiveSpace>().id
 
         val groupId = client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "My Group", spaceId = sharedSpaceId))
         }.body<ActiveGroup>().id
 
         val updated = client.patch("groups/$groupId") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(UpdateGroup(clearSpace = true))
         }.body<ActiveGroup>()
@@ -404,12 +404,12 @@ class SpacesRoutingTest {
     @Test
     fun `creating a group auto-creates private space for caller`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "First Group"))
         }
 
-        val spaces = client.get("spaces") { header("X-Forwarded-User", "alice") }.body<List<ActiveSpace>>()
+        val spaces = client.get("spaces") { header("X-Auth-Request-User", "alice") }.body<List<ActiveSpace>>()
         assertEquals(1, spaces.size)
         val private = spaces.single()
         assertEquals(true, private.isPrivate)
@@ -421,25 +421,25 @@ class SpacesRoutingTest {
     fun `private space created only once for same user`() = dbApp(authMode = AuthMode.HEADER) {
         repeat(3) {
             client.post("groups") {
-                header("X-Forwarded-User", "alice")
+                header("X-Auth-Request-User", "alice")
                 contentType(ContentType.Application.Json)
                 setBody(AddGroup(title = "Group $it"))
             }
         }
 
-        val spaces = client.get("spaces") { header("X-Forwarded-User", "alice") }.body<List<ActiveSpace>>()
+        val spaces = client.get("spaces") { header("X-Auth-Request-User", "alice") }.body<List<ActiveSpace>>()
         assertEquals(1, spaces.filter { it.isPrivate }.size)
     }
 
     @Test
     fun `group created without spaceId goes into private space`() = dbApp(authMode = AuthMode.HEADER) {
         val group = client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "My Group"))
         }.body<ActiveGroup>()
 
-        val spaces = client.get("spaces") { header("X-Forwarded-User", "alice") }.body<List<ActiveSpace>>()
+        val spaces = client.get("spaces") { header("X-Auth-Request-User", "alice") }.body<List<ActiveSpace>>()
         val privateSpaceId = spaces.single { it.isPrivate }.id
         assertEquals(privateSpaceId, group.spaceId)
     }
@@ -447,31 +447,31 @@ class SpacesRoutingTest {
     @Test
     fun `DELETE private space returns 400`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "First Group"))
         }
 
-        val privateSpaceId = client.get("spaces") { header("X-Forwarded-User", "alice") }
+        val privateSpaceId = client.get("spaces") { header("X-Auth-Request-User", "alice") }
             .body<List<ActiveSpace>>().single { it.isPrivate }.id
 
-        val response = client.delete("spaces/$privateSpaceId") { header("X-Forwarded-User", "alice") }
+        val response = client.delete("spaces/$privateSpaceId") { header("X-Auth-Request-User", "alice") }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     @Test
     fun `POST members to private space returns 400`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "First Group"))
         }
 
-        val privateSpaceId = client.get("spaces") { header("X-Forwarded-User", "alice") }
+        val privateSpaceId = client.get("spaces") { header("X-Auth-Request-User", "alice") }
             .body<List<ActiveSpace>>().single { it.isPrivate }.id
 
         val response = client.post("spaces/$privateSpaceId/members") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddSpaceMember(userId = "bob"))
         }
@@ -481,12 +481,12 @@ class SpacesRoutingTest {
     @Test
     fun `private space not visible to other users`() = dbApp(authMode = AuthMode.HEADER) {
         client.post("groups") {
-            header("X-Forwarded-User", "alice")
+            header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
             setBody(AddGroup(title = "Alice Group"))
         }
 
-        val bobSpaces = client.get("spaces") { header("X-Forwarded-User", "bob") }.body<List<ActiveSpace>>()
+        val bobSpaces = client.get("spaces") { header("X-Auth-Request-User", "bob") }.body<List<ActiveSpace>>()
         assertTrue(bobSpaces.isEmpty())
     }
 }
