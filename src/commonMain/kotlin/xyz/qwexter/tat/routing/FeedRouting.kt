@@ -9,26 +9,32 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import xyz.qwexter.AuthMode
 import xyz.qwexter.addCORSHeaders
+import xyz.qwexter.tat.models.SpaceId
 import xyz.qwexter.tat.repository.FeedChild
 import xyz.qwexter.tat.repository.FeedEntry
 import xyz.qwexter.tat.repository.FeedPage
 import xyz.qwexter.tat.repository.FeedRepository
+import xyz.qwexter.tat.repository.SpacesRepository
 
 private const val DEFAULT_LIMIT = 20L
 private const val MAX_LIMIT = 100L
 
 fun Application.feedRouting(
     feedRepository: FeedRepository,
+    spacesRepository: SpacesRepository,
     authMode: AuthMode = AuthMode.NONE,
     corsEnabled: Boolean = false,
 ) {
     routing {
         get("/feed") {
             if (corsEnabled) call.addCORSHeaders()
-            val ownerId = call.resolveOwnerId(authMode) ?: return@get
+            val ownerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@get
             val limit = call.request.queryParameters["limit"]?.toLongOrNull()?.coerceIn(1, MAX_LIMIT) ?: DEFAULT_LIMIT
             val offset = call.request.queryParameters["offset"]?.toLongOrNull()?.coerceAtLeast(0) ?: 0L
             val spaceId = call.request.queryParameters["spaceId"]?.takeIf { it.isNotBlank() }
+            if (spaceId != null && !call.validateSpaceAccess(spacesRepository, SpaceId(spaceId), ownerId)) {
+                return@get
+            }
             val page = feedRepository.getFeedPage(ownerId, limit, offset, spaceId)
             call.respond(HttpStatusCode.OK, page.toApi())
         }

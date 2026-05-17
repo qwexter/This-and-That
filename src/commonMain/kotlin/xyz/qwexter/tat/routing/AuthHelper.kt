@@ -4,6 +4,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
 import xyz.qwexter.AuthMode
+import xyz.qwexter.tat.models.SpaceId
+import xyz.qwexter.tat.repository.SpacesRepository
 
 internal const val DEV_OWNER_ID = "dev-user"
 internal const val DEV_DISPLAY_NAME = "Dev User"
@@ -21,6 +23,27 @@ internal suspend fun ApplicationCall.resolveOwnerId(authMode: AuthMode): String?
             id
         }
     }
+}
+
+internal suspend fun ApplicationCall.resolveOwnerIdWithPrivateSpace(
+    authMode: AuthMode,
+    spacesRepository: SpacesRepository,
+): String? {
+    val ownerId = resolveOwnerId(authMode) ?: return null
+    spacesRepository.getOrCreatePrivateSpace(ownerId)
+    return ownerId
+}
+
+internal suspend fun ApplicationCall.validateSpaceAccess(
+    spacesRepository: SpacesRepository,
+    spaceId: SpaceId,
+    userId: String,
+): Boolean {
+    if (!spacesRepository.hasAccess(spaceId, userId)) {
+        respond(HttpStatusCode.Forbidden)
+        return false
+    }
+    return true
 }
 
 internal fun ApplicationCall.resolveDisplayName(authMode: AuthMode, userId: String): String = when (authMode) {

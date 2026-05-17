@@ -29,27 +29,27 @@ fun Application.spacesRouting(
         route("/spaces") {
             get {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@get
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@get
                 call.respond(HttpStatusCode.OK, spacesRepository.allActiveSpaces(callerId).map { it.toApi() })
             }
             get("/{spaceId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@get
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@get
                 call.getSpace(spacesRepository, callerId)
             }
             post {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@post
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@post
                 call.postSpace(spacesRepository, callerId)
             }
             patch("/{spaceId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@patch
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@patch
                 call.patchSpace(spacesRepository, callerId)
             }
             delete("/{spaceId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@delete
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@delete
                 call.deleteSpace(spacesRepository, callerId)
             }
             spaceMemberRoutes(spacesRepository, authMode, corsEnabled)
@@ -64,17 +64,17 @@ private fun Route.spaceMemberRoutes(
 ) {
     get("/{spaceId}/members") {
         if (corsEnabled) call.addCORSHeaders()
-        val callerId = call.resolveOwnerId(authMode) ?: return@get
+        val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@get
         call.listMembers(spacesRepository, callerId)
     }
     post("/{spaceId}/members") {
         if (corsEnabled) call.addCORSHeaders()
-        val callerId = call.resolveOwnerId(authMode) ?: return@post
+        val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@post
         call.addMember(spacesRepository, callerId)
     }
     delete("/{spaceId}/members/{userId}") {
         if (corsEnabled) call.addCORSHeaders()
-        val callerId = call.resolveOwnerId(authMode) ?: return@delete
+        val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@delete
         call.removeMember(spacesRepository, callerId)
     }
 }

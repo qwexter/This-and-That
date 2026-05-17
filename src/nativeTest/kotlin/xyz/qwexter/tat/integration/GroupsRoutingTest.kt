@@ -20,6 +20,7 @@ import xyz.qwexter.tat.routing.UpdateGroup
 import xyz.qwexter.tat.utils.dbApp
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -221,7 +222,7 @@ class GroupsRoutingTest {
     }
 
     @Test
-    fun `PATCH groups clearSpace removes group from space`() = dbApp(authMode = AuthMode.HEADER) {
+    fun `PATCH groups clearSpace moves group to private space`() = dbApp(authMode = AuthMode.HEADER) {
         val spaceId = client.post("spaces") {
             header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
@@ -240,7 +241,11 @@ class GroupsRoutingTest {
             setBody(UpdateGroup(clearSpace = true))
         }.body<ActiveGroup>()
 
-        assertNull(updated.spaceId)
+        val privateSpace = client.get("spaces") {
+            header("X-Auth-Request-User", "alice")
+        }.body<List<ActiveSpace>>().find { it.isPrivate }
+        assertNotNull(privateSpace)
+        assertEquals(privateSpace.id, updated.spaceId)
     }
 
     @Test
