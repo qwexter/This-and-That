@@ -32,42 +32,13 @@ fun Application.configureRouting(
     corsEnabled: Boolean = false,
 ) {
     install(Resources)
-    install(StatusPages) {
-        exception<BadRequestException> { call, cause ->
-            call.respondText(text = cause.message ?: "Bad request", status = HttpStatusCode.BadRequest)
-        }
-        exception<Throwable> { call, cause ->
-            Log.error(
-                "unhandled exception",
-                "method" to call.request.httpMethod.value,
-                "uri" to call.request.uri,
-                "error" to cause.toString(),
-            )
-            call.respondText(text = "500: $cause", status = HttpStatusCode.InternalServerError)
-        }
-    }
+    installStatusPages()
     routing {
         get("/health") {
             call.respondText("ok", status = HttpStatusCode.OK)
         }
     }
-    if (corsEnabled) {
-        routing {
-            options("/health") { call.respondCORSPreflight() }
-            options("/me") { call.respondCORSPreflight() }
-            options("/tasks") { call.respondCORSPreflight() }
-            options("/tasks/{...}") { call.respondCORSPreflight() }
-            options("/records") { call.respondCORSPreflight() }
-            options("/records/{...}") { call.respondCORSPreflight() }
-            options("/groups") { call.respondCORSPreflight() }
-            options("/groups/{...}") { call.respondCORSPreflight() }
-            options("/groups/{groupId}/items") { call.respondCORSPreflight() }
-            options("/spaces") { call.respondCORSPreflight() }
-            options("/spaces/{...}") { call.respondCORSPreflight() }
-            options("/invites/{...}") { call.respondCORSPreflight() }
-            options("/feed") { call.respondCORSPreflight() }
-        }
-    }
+    if (corsEnabled) configureCorsPreflightRoutes()
     meRouting(spacesRepository = repositories.spaces, authMode = authMode, corsEnabled = corsEnabled)
     tasksRouting(tasksRepository = repositories.tasks, authMode = authMode, corsEnabled = corsEnabled)
     recordsRouting(recordsRepository = repositories.records, authMode = authMode, corsEnabled = corsEnabled)
@@ -90,6 +61,41 @@ fun Application.configureRouting(
         authMode = authMode,
         corsEnabled = corsEnabled,
     )
+}
+
+private fun Application.installStatusPages() {
+    install(StatusPages) {
+        exception<BadRequestException> { call, cause ->
+            call.respondText(text = cause.message ?: "Bad request", status = HttpStatusCode.BadRequest)
+        }
+        exception<Throwable> { call, cause ->
+            Log.error(
+                "unhandled exception",
+                "method" to call.request.httpMethod.value,
+                "uri" to call.request.uri,
+                "error" to cause.toString(),
+            )
+            call.respondText(text = "500: $cause", status = HttpStatusCode.InternalServerError)
+        }
+    }
+}
+
+private fun Application.configureCorsPreflightRoutes() {
+    routing {
+        options("/health") { call.respondCORSPreflight() }
+        options("/me") { call.respondCORSPreflight() }
+        options("/tasks") { call.respondCORSPreflight() }
+        options("/tasks/{...}") { call.respondCORSPreflight() }
+        options("/records") { call.respondCORSPreflight() }
+        options("/records/{...}") { call.respondCORSPreflight() }
+        options("/groups") { call.respondCORSPreflight() }
+        options("/groups/{...}") { call.respondCORSPreflight() }
+        options("/groups/{groupId}/items") { call.respondCORSPreflight() }
+        options("/spaces") { call.respondCORSPreflight() }
+        options("/spaces/{...}") { call.respondCORSPreflight() }
+        options("/invites/{...}") { call.respondCORSPreflight() }
+        options("/feed") { call.respondCORSPreflight() }
+    }
 }
 
 data class Repositories(
