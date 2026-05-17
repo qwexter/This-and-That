@@ -48,7 +48,7 @@ private suspend fun ApplicationCall.handleCreateInvite(
     spacesRepository: SpacesRepository,
     authMode: AuthMode,
 ) {
-    val callerId = resolveOwnerId(authMode) ?: return
+    val callerId = resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return
     val spaceId = SpaceId(parameters["spaceId"]!!)
     val space = spacesRepository.getSpaceById(spaceId)
     if (space == null || space.deletedAt != null || space.ownerId != callerId) {
@@ -88,7 +88,7 @@ private suspend fun ApplicationCall.handleAcceptInvite(
     spacesRepository: SpacesRepository,
     authMode: AuthMode,
 ) {
-    val callerId = resolveOwnerId(authMode) ?: return
+    val callerId = resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return
     val token = parameters["token"]!!
     val invite = invitesRepository.getInvite(token)
     val space = invite?.let { spacesRepository.getSpaceById(it.spaceId) }

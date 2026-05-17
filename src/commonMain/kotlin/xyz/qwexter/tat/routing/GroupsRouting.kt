@@ -36,32 +36,32 @@ fun Application.groupsRouting(
         route("/groups") {
             get {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@get
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@get
                 call.respond(HttpStatusCode.OK, groupsRepository.allActiveGroups(callerId).map { it.toApi() })
             }
             get("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@get
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@get
                 call.getGroup(groupsRepository, callerId)
             }
             post {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@post
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@post
                 call.postGroup(groupsRepository, spacesRepository, callerId)
             }
             patch("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@patch
-                call.patchGroup(groupsRepository, callerId)
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@patch
+                call.patchGroup(groupsRepository, spacesRepository, callerId)
             }
             delete("/{groupId}") {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@delete
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@delete
                 call.deleteGroup(groupsRepository, callerId)
             }
             post("/{groupId}/items") {
                 if (corsEnabled) call.addCORSHeaders()
-                val callerId = call.resolveOwnerId(authMode) ?: return@post
+                val callerId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@post
                 call.addGroupItems(groupsRepository, callerId)
             }
         }
@@ -88,14 +88,20 @@ private suspend fun ApplicationCall.postGroup(
     if (body.title.length > TITLE_MAX_LENGTH) {
         throw BadRequestException("title must not exceed $TITLE_MAX_LENGTH characters")
     }
-    val spaceId = body.spaceId?.let { SpaceId(it) }
-        ?: spacesRepo.getOrCreatePrivateSpace(callerId).id
+    val spaceId = if (body.spaceId != null) {
+        val requestedSpaceId = SpaceId(body.spaceId)
+        if (!validateSpaceAccess(spacesRepo, requestedSpaceId, callerId)) return
+        requestedSpaceId
+    } else {
+        spacesRepo.getOrCreatePrivateSpace(callerId).id
+    }
     val group = repo.createGroup(ownerId = callerId, title = body.title.trim(), spaceId = spaceId)
     respond(HttpStatusCode.Created, group.toApi())
 }
 
 private suspend fun ApplicationCall.patchGroup(
     repo: GroupsRepository,
+    spacesRepo: SpacesRepository,
     callerId: String,
 ) {
     val groupId = GroupId(parameters["groupId"]!!)
@@ -106,10 +112,19 @@ private suspend fun ApplicationCall.patchGroup(
             throw BadRequestException("title must not exceed $TITLE_MAX_LENGTH characters")
         }
     }
+    val resolvedSpaceId = when {
+        body.clearSpace -> spacesRepo.getOrCreatePrivateSpace(callerId).id
+        body.spaceId != null -> {
+            val requestedSpaceId = SpaceId(body.spaceId)
+            if (!validateSpaceAccess(spacesRepo, requestedSpaceId, callerId)) return
+            requestedSpaceId
+        }
+        else -> null
+    }
     val params = GroupUpdateParams(
         title = body.title?.trim(),
-        spaceId = body.spaceId?.let { SpaceId(it) },
-        clearSpace = body.clearSpace,
+        spaceId = resolvedSpaceId,
+        clearSpace = false,
     )
     val group = repo.updateGroup(ownerId = callerId, groupId = groupId, params = params)
     if (group == null) {

@@ -68,7 +68,7 @@ fun Application.configureRouting(
             options("/feed") { call.respondCORSPreflight() }
         }
     }
-    meRouting(authMode = authMode, corsEnabled = corsEnabled)
+    meRouting(spacesRepository = repositories.spaces, authMode = authMode, corsEnabled = corsEnabled)
     tasksRouting(tasksRepository = repositories.tasks, authMode = authMode, corsEnabled = corsEnabled)
     recordsRouting(recordsRepository = repositories.records, authMode = authMode, corsEnabled = corsEnabled)
     groupsRouting(
@@ -84,7 +84,12 @@ fun Application.configureRouting(
         authMode = authMode,
         corsEnabled = corsEnabled,
     )
-    feedRouting(feedRepository = repositories.feed, authMode = authMode, corsEnabled = corsEnabled)
+    feedRouting(
+        feedRepository = repositories.feed,
+        spacesRepository = repositories.spaces,
+        authMode = authMode,
+        corsEnabled = corsEnabled,
+    )
 }
 
 data class Repositories(

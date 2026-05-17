@@ -8,15 +8,17 @@ import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import xyz.qwexter.AuthMode
 import xyz.qwexter.addCORSHeaders
+import xyz.qwexter.tat.repository.SpacesRepository
 
 fun Application.meRouting(
+    spacesRepository: SpacesRepository,
     authMode: AuthMode = AuthMode.NONE,
     corsEnabled: Boolean = false,
 ) {
     routing {
         get("/me") {
             if (corsEnabled) call.addCORSHeaders()
-            val userId = call.resolveOwnerId(authMode) ?: return@get
+            val userId = call.resolveOwnerIdWithPrivateSpace(authMode, spacesRepository) ?: return@get
             val displayName = call.resolveDisplayName(authMode, userId)
             call.respond(HttpStatusCode.OK, MeResponse(userId = userId, displayName = displayName))
         }

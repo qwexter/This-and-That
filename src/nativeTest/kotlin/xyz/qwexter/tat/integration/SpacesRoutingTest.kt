@@ -22,6 +22,8 @@ import xyz.qwexter.tat.routing.UpdateSpace
 import xyz.qwexter.tat.utils.dbApp
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -44,8 +46,10 @@ class SpacesRoutingTest {
             header("X-Auth-Request-User", "alice")
         }.body<List<ActiveSpace>>()
 
-        assertEquals(1, list.size)
-        assertEquals(created.id, list.single().id)
+        // 2 spaces: private space (auto-created) + My Space
+        assertEquals(2, list.size)
+        assertTrue(list.any { it.id == created.id })
+        assertTrue(list.any { it.isPrivate })
     }
 
     @Test
@@ -62,8 +66,11 @@ class SpacesRoutingTest {
         }
 
         val aliceSpaces = client.get("spaces") { header("X-Auth-Request-User", "alice") }.body<List<ActiveSpace>>()
-        assertEquals(1, aliceSpaces.size)
-        assertEquals("Alice Space", aliceSpaces.single().title)
+        // 2 spaces: private space (auto-created) + Alice Space
+        assertEquals(2, aliceSpaces.size)
+        assertTrue(aliceSpaces.any { it.title == "Alice Space" })
+        assertTrue(aliceSpaces.any { it.isPrivate })
+        assertFalse(aliceSpaces.any { it.title == "Bob Space" })
     }
 
     @Test
@@ -124,7 +131,9 @@ class SpacesRoutingTest {
         }.status)
 
         val list = client.get("spaces") { header("X-Auth-Request-User", "alice") }.body<List<ActiveSpace>>()
-        assertTrue(list.isEmpty())
+        // Only private space remains
+        assertEquals(1, list.size)
+        assertTrue(list.single().isPrivate)
     }
 
     @Test
@@ -300,8 +309,10 @@ class SpacesRoutingTest {
         }
 
         val bobSpaces = client.get("spaces") { header("X-Auth-Request-User", "bob") }.body<List<ActiveSpace>>()
-        assertEquals(1, bobSpaces.size)
-        assertEquals(spaceId, bobSpaces.single().id)
+        // 2 spaces: Bob's private space + the shared space
+        assertEquals(2, bobSpaces.size)
+        assertTrue(bobSpaces.any { it.id == spaceId })
+        assertTrue(bobSpaces.any { it.isPrivate })
     }
 
     @Test
@@ -377,7 +388,7 @@ class SpacesRoutingTest {
     }
 
     @Test
-    fun `clearSpace removes group from space`() = dbApp(authMode = AuthMode.HEADER) {
+    fun `clearSpace moves group to private space`() = dbApp(authMode = AuthMode.HEADER) {
         val sharedSpaceId = client.post("spaces") {
             header("X-Auth-Request-User", "alice")
             contentType(ContentType.Application.Json)
@@ -396,7 +407,11 @@ class SpacesRoutingTest {
             setBody(UpdateGroup(clearSpace = true))
         }.body<ActiveGroup>()
 
-        assertNull(updated.spaceId)
+        val privateSpace = client.get("spaces") {
+            header("X-Auth-Request-User", "alice")
+        }.body<List<ActiveSpace>>().find { it.isPrivate }
+        assertNotNull(privateSpace)
+        assertEquals(privateSpace.id, updated.spaceId)
     }
 
     // --- Private space ---
@@ -487,6 +502,9 @@ class SpacesRoutingTest {
         }
 
         val bobSpaces = client.get("spaces") { header("X-Auth-Request-User", "bob") }.body<List<ActiveSpace>>()
-        assertTrue(bobSpaces.isEmpty())
+        // Bob only sees his own private space, not Alice's
+        assertEquals(1, bobSpaces.size)
+        assertTrue(bobSpaces.single().isPrivate)
+        assertEquals("bob", bobSpaces.single().ownerId)
     }
 }
